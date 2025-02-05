@@ -22,10 +22,7 @@ class Geometry:
         self.Deq = (d_ab * d_ac * d_bc) ** (1 / 3)
         return self.Deq
 
-# Validation
-if __name__ == "__main__":
-    geometry1 = Geometry("Geometry 1", 0, 0, 18.5, 0,
-                         37, 0)
-    print(geometry1.name, geometry1.xa, geometry1.ya,
-          geometry1.xb, geometry1.yb, geometry1.xc, geometry1.yc)
-    print(geometry1.Deq)
+    def __repr__(self):
+        """Returns a detailed string representation of the Geometry object."""
+        return (f"Geometry(name='{self.name}', Deq={self.Deq:.4f} ft, "
+                f"Phase A=({self.xa}, {self.ya}), Phase B=({self.xb}, {self.yb}), Phase C=({self.xc}, {self.yc}))")

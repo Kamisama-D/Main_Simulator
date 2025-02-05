@@ -7,10 +7,7 @@ class Bus:
         self.index = Bus.count
         Bus.count += 1
 
-# Validation
-if __name__ == '__main__':
-    bus1 = Bus("Bus 1", 20)
-    bus2 = Bus("Bus 2", 230)
-    print(bus1.name, bus1.base_kv, bus1.index)
-    print(bus2.name, bus2.base_kv, bus2.index)
-    print(Bus.count)
+    def __repr__(self):
+        """Returns a string representation of the Bus object."""
+        return f"Bus(name='{self.name}', base_kv={self.base_kv}, index={self.index})"
+

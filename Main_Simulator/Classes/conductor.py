@@ -1,14 +1,18 @@
 class Conductor:
     def __init__(self, name:str, diam:float, GMR:float, resistance:float, ampacity:float):
         self.name = name
-        self.diam = diam
-        self.GMR = GMR # Geometric Mean Radius
-        self.resistance = resistance
+        self.diam = diam # Normally given in inches
+        self.GMR = GMR # Geometric Mean Radius, feet
+        self.resistance = resistance #ohms/mile
         self.ampacity = ampacity
+        self.radius = self.calc_radius()  # Compute the radius in feet
 
-# Validation
-if __name__ == "__main__":
-    conductor1 = Conductor("Partridge", 0.642, 0.0217,
-                           0.385, 460)
-    print(conductor1.name, conductor1.diam,
-         conductor1.GMR, conductor1.resistance, conductor1.ampacity)
+    def calc_radius(self):
+        """Calculates the radius of the conductor in feet using the given formula."""
+        return self.diam / 24  # Formula: radius (feet) = diameter (inches) / 24
+
+    def __repr__(self):
+        """Returns a string representation of the Conductor object."""
+        return (f"Conductor(name='{self.name}', diam={self.diam} in, GMR={self.GMR} ft, "
+                f"resistance={self.resistance} Ω/mi, ampacity={self.ampacity} A)")
+
