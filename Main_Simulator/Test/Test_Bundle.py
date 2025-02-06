@@ -24,12 +24,12 @@ def test_bundle_class():
     assert bundle1.DSL == conductor1.GMR, "DSL calculation incorrect for single conductor"
     assert bundle2.DSL == (conductor1.GMR * bundle2.spacing) ** 0.5, "DSL incorrect for double bundle"
     assert bundle3.DSL == (conductor1.GMR * bundle3.spacing ** 2) ** (1/3), "DSL incorrect for triple bundle"
-    assert bundle4.DSL == 1.091 * (conductor1.GMR * bundle4.spacing ** 4) ** (1/4), "DSL incorrect for quad bundle"
+    assert bundle4.DSL == 1.091 * (conductor1.GMR * bundle4.spacing ** 3) ** (1/4), "DSL incorrect for quad bundle"
 
     assert bundle1.DSC == conductor1.radius, "DSC calculation incorrect for single conductor"
     assert bundle2.DSC == (conductor1.radius * bundle2.spacing) ** 0.5, "DSC incorrect for double bundle"
     assert bundle3.DSC == (conductor1.radius * bundle3.spacing ** 2) ** (1/3), "DSC incorrect for triple bundle"
-    assert bundle4.DSC == 1.091 * (conductor1.radius * bundle4.spacing ** 4) ** (1/4), "DSC incorrect for quad bundle"
+    assert bundle4.DSC == 1.091 * (conductor1.radius * bundle4.spacing ** 3) ** (1/4), "DSC incorrect for quad bundle"
 
     print("\nAll Bundle class tests passed!")
 

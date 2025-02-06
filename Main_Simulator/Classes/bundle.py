@@ -34,7 +34,7 @@ class Bundle:
         elif self.num_conductors == 3:
             return (self.conductor.GMR * (self.spacing ** 2)) ** (1/3)  # DSL = ³√(GMRc * d²)
         elif self.num_conductors == 4:
-            return 1.091 * (self.conductor.GMR * (self.spacing ** 4)) ** (1/4)  # DSL = 1.091 * ⁴√(GMRc * d⁴)
+            return 1.091 * (self.conductor.GMR * (self.spacing ** 3)) ** (1/4)  # DSL = 1.091 * ⁴√(GMRc * d^3)
 
     def calc_DSC(self):
         """Calculates the Equivalent Radius (DSC) based on the number of conductors."""
@@ -45,7 +45,7 @@ class Bundle:
         elif self.num_conductors == 3:
             return (self.conductor.radius * (self.spacing ** 2)) ** (1/3)  # DSC = ³√(rc * d²)
         elif self.num_conductors == 4:
-            return 1.091 * (self.conductor.radius * (self.spacing ** 4)) ** (1/4)  # DSC = 1.091 * ⁴√(rc * d⁴)
+            return 1.091 * (self.conductor.radius * (self.spacing ** 3)) ** (1/4)  # DSC = 1.091 * ⁴√(rc * d^3)
 
     def __repr__(self):
         """Returns a detailed string representation of the Bundle object."""
