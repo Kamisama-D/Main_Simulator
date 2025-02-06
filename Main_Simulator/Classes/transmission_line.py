@@ -59,18 +59,21 @@ class TransmissionLine:
 
     def calc_resistance(self):
         """Calculates the series resistance (Ω/mile)."""
-        return self.bundle.conductor.resistance / self.bundle.num_conductors
+        """Multipy length of the line to calculates the series resistance (Ω)."""
+        return (self.bundle.conductor.resistance / self.bundle.num_conductors) * self.length
 
     def calc_reactance(self):
         """Calculates the series reactance (Ω/mile)."""
+        """Multipy length of the line to calculates the series reactance (Ω)."""
         return (2 * math.pi * self.frequency * 2e-7 *
-                math.log(self.geometry.Deq / self.bundle.DSL) * 1609.34)
+                math.log(self.geometry.Deq / self.bundle.DSL) * 1609.34 * self.length)
 
     def calc_susceptance(self):
         """Calculates the shunt susceptance (S/mile)."""
+        """Multipy length of the line to calculates the shunt susceptance (S)."""
         return (2 * math.pi * self.frequency *
                 (2 * math.pi * 8.854e-12) /
-                math.log(self.geometry.Deq / self.bundle.DSC) * 1609.34)
+                math.log(self.geometry.Deq / self.bundle.DSC) * 1609.34 * self.length)
 
     def calc_yseries(self):
         """Calculates the series admittance."""
@@ -89,8 +92,8 @@ class TransmissionLine:
         """Returns a detailed string representation of the TransmissionLine object."""
         return (f"TransmissionLine(name='{self.name}', length={self.length} mi, "
                 f"z_base={self.z_base:.4f} Ω, y_base={self.y_base:.6e} S, "
-                f"r_series={self.r_series:.4f} Ω/mi, x_series={self.x_series:.4f} Ω/mi, "
-                f"b_shunt={self.b_shunt:.6e} S/mi, y_series={self.y_series:.4f} S, "
+                f"r_series={self.r_series:.4f} Ω, x_series={self.x_series:.4f} Ω, "
+                f"b_shunt={self.b_shunt:.6e} S, y_series={self.y_series:.4f} S, "
                 f"bus1='{self.bus1.name}', bus2='{self.bus2.name}')")
 
 
