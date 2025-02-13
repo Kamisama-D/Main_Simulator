@@ -1,4 +1,5 @@
 import math
+import cmath
 from Classes.bus import Bus
 from Classes.bundle import Bundle
 from Classes.geometry import Geometry
@@ -6,7 +7,7 @@ from Classes.geometry import Geometry
 class TransmissionLine:
     """Represents a high-voltage transmission line between two buses."""
 
-    def __init__(self, name: str, bus1: Bus, bus2: Bus, bundle: Bundle, geometry: Geometry, length: float, frequency=60):
+    def __init__(self, name: str, bus1, bus2, bundle, geometry, length: float, s_base: float, frequency=60):
         """
         Initializes a TransmissionLine object.
 
@@ -17,8 +18,12 @@ class TransmissionLine:
         - bundle (Bundle): The Bundle object (providing DSL, DSC, resistance).
         - geometry (Geometry): The Geometry object (providing Deq).
         - length (float): Length of the transmission line in miles.
+        - s_base (float): System base power in MVA.
         - frequency (float, optional): Operating frequency in Hz (default = 60 Hz).
         """
+        if bus1.base_kv != bus2.base_kv:
+            raise ValueError("Buses must have the same voltage rating.")
+
         self.name = name
         self.bus1 = bus1
         self.bus2 = bus2
@@ -26,75 +31,95 @@ class TransmissionLine:
         self.geometry = geometry
         self.length = length
         self.frequency = frequency
-
-        # Estimate S_base using Bus Voltage and Conductor Ampacity
-        self.s_base = self.estimate_s_base()
+        self.s_base = s_base
+        self.v_base = bus1.base_kv
 
         # Calculate base values
-        self.z_base, self.y_base = self.calc_base_values()
+        self.z_base_sys, self.y_base_sys = self.calc_base_values()
 
         # Calculate electrical parameters
         self.r_series = self.calc_resistance()
         self.x_series = self.calc_reactance()
-        self.b_shunt = self.calc_susceptance()
-        self.y_series = self.calc_yseries()
+        self.z_tl = complex(self.r_series, self.x_series)
+        self.z_pu_sys = self.z_tl / self.z_base_sys
+        self.y_tl = self.calc_admittance()
+        self.y_pu_sys = 1 / self.z_pu_sys if self.z_pu_sys != 0 else complex(0, 0)
+
+        # Compute Y-primitive matrices
         self.yprim = self.calc_yprim()
-
-    def estimate_s_base(self):
-        """Estimates base power using bus voltage and conductor ampacity."""
-        v_base_kv = self.bus1.base_kv  # Base voltage in kV
-        i_max = self.bundle.conductor.ampacity  # Maximum conductor ampacity in A
-
-        if v_base_kv and i_max:
-            return (math.sqrt(3) * v_base_kv * 1e3 * i_max) / 1e6  # Convert to MVA
-        return 100  # Default if no data available
+        self.yprim_pu = self.calc_yprim_pu()
 
     def calc_base_values(self):
         """Calculates the base impedance and base admittance."""
-        v_base_kv = self.bus1.base_kv  # Base voltage in kV
-        v_base = v_base_kv * 1e3  # Convert kV to V
+        v_base = self.v_base * 1e3  # Convert kV to V
         z_base = (v_base ** 2) / (self.s_base * 1e6)  # Base impedance in ohms
         y_base = 1 / z_base if z_base != 0 else 0  # Base admittance in Siemens
         return z_base, y_base
 
     def calc_resistance(self):
-        """Calculates the series resistance (Ω/mile)."""
-        """Multipy length of the line to calculates the series resistance (Ω)."""
+        """Calculates the series resistance (Ω)."""
         return (self.bundle.conductor.resistance / self.bundle.num_conductors) * self.length
 
     def calc_reactance(self):
-        """Calculates the series reactance (Ω/mile)."""
-        """Multipy length of the line to calculates the series reactance (Ω)."""
+        """Calculates the series reactance (Ω)."""
         return (2 * math.pi * self.frequency * 2e-7 *
                 math.log(self.geometry.Deq / self.bundle.DSL) * 1609.34 * self.length)
 
-    def calc_susceptance(self):
-        """Calculates the shunt susceptance (S/mile)."""
-        """Multipy length of the line to calculates the shunt susceptance (S)."""
-        return (2 * math.pi * self.frequency *
-                (2 * math.pi * 8.854e-12) /
-                math.log(self.geometry.Deq / self.bundle.DSC) * 1609.34 * self.length)
-
-    def calc_yseries(self):
+    def calc_admittance(self):
         """Calculates the series admittance."""
-        z_series = complex(self.r_series, self.x_series)
-        return 1 / z_series if z_series != 0 else complex(0, 0)
+        return 1 / self.z_tl if self.z_tl != 0 else complex(0, 0)
 
     def calc_yprim(self):
         """Calculates the Y-primitive matrix for the transmission line."""
-        yprim = [
-            [self.y_series + (self.b_shunt / 2) * 1j, -self.y_series],
-            [-self.y_series, self.y_series + (self.b_shunt / 2) * 1j]
+        return [
+            [self.y_tl + (self.y_base_sys / 2) * 1j, -self.y_tl],
+            [-self.y_tl, self.y_tl + (self.y_base_sys / 2) * 1j]
         ]
-        return yprim
+
+    def calc_yprim_pu(self):
+        """Calculates the Y-primitive matrix in per-unit."""
+        return [
+            [self.y_pu_sys + (self.y_base_sys / 2) * 1j, -self.y_pu_sys],
+            [-self.y_pu_sys, self.y_pu_sys + (self.y_base_sys / 2) * 1j]
+        ]
 
     def __repr__(self):
         """Returns a detailed string representation of the TransmissionLine object."""
-        return (f"TransmissionLine(name='{self.name}', length={self.length} mi, "
-                f"z_base={self.z_base:.4f} Ω, y_base={self.y_base:.6e} S, "
-                f"r_series={self.r_series:.4f} Ω, x_series={self.x_series:.4f} Ω, "
-                f"b_shunt={self.b_shunt:.6e} S, y_series={self.y_series:.4f} S, "
-                f"bus1='{self.bus1.name}', bus2='{self.bus2.name}')")
+        return (f"""
+            --- Transmission Line Details ---
+            Name: {self.name}
+            Buses: {self.bus1.name} - {self.bus2.name}
+            Bundle: {self.bundle}
+            Geometry: {self.geometry}
+            Length: {self.length} mi
+            Frequency: {self.frequency} Hz
+            
+            --- Base Values ---
+            s_base: {self.s_base} MVA
+            v_base: {self.v_base} kV
+            z_base_sys: {self.z_base_sys:.4f} Ω
+            
+            --- Impedance and Admittance Values ---
+            z_tl: {abs(self.z_tl):.4f} Ω
+            z_pu_sys: {abs(self.z_pu_sys):.4f} pu
+            y_tl: {abs(self.y_tl):.4f} S
+            y_pu_sys: {abs(self.y_pu_sys):.4f} pu
+            
+            --- Resistance and Reactance Values ---
+            r_series: {abs(self.r_series):.4f} Ω
+            r_series_pu: {abs(self.z_pu_sys.real):.4f} pu
+            x_series: {abs(self.x_series):.4f} Ω
+            x_series_pu: {abs(self.z_pu_sys.imag):.4f} pu
+            
+            --- Y-Primitive Matrix (Yprim) [Siemens] ---
+            [{self.yprim[0][0]:.4f}, {self.yprim[0][1]:.4f}]
+            [{self.yprim[1][0]:.4f}, {self.yprim[1][1]:.4f}]
+
+            --- Y-Primitive Matrix (Yprim_pu) [Per Unit] ---
+            [{self.yprim_pu[0][0]:.4f}, {self.yprim_pu[0][1]:.4f}]
+            [{self.yprim_pu[1][0]:.4f}, {self.yprim_pu[1][1]:.4f}]
+                    """)
+
 
 
 
