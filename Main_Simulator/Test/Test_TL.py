@@ -24,9 +24,10 @@ def test_transmission_line_class():
 
     # Define system base power (explicitly set instead of estimating)
     s_base = 100  # MVA
+    f_base = 60  # Hz
 
     # Create transmission line instance
-    line1 = TransmissionLine("Line 1", bus1, bus2, bundle1, geometry1, length=10, s_base=s_base)
+    line1 = TransmissionLine("Line 1", bus1, bus2, bundle1, geometry1, length=10, s_base=s_base, frequency=f_base)
 
     # Print transmission line details
     print(line1)
