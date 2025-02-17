@@ -37,6 +37,8 @@ class Circuit:
             raise ValueError(f"Transmission Line '{transmission_line.name}' already exists in the circuit.")
         self.transmission_lines[transmission_line.name] = transmission_line
 
+    def round_complex(self, z, digits = 2):
+        return complex(round(z.real, digits), round(z.imag, digits))
 
     def calc_ybus(self):
         """ Define Seven Bus System """
@@ -50,13 +52,8 @@ class Circuit:
         bus7 = Bus("Bus 7", 18)
 
         # Add Buses to Circuit
-        self.add_bus(bus1)
-        self.add_bus(bus2)
-        self.add_bus(bus3)
-        self.add_bus(bus4)
-        self.add_bus(bus5)
-        self.add_bus(bus6)
-        self.add_bus(bus7)
+        for bus in [bus1, bus2, bus3, bus4, bus5, bus6, bus7]:
+            self.add_bus(bus)
 
         # Define Transformers
         transformer1 = Transformer("T1", bus1, bus2, power_rating=125, impedance_percent=8.5, x_over_r_ratio=10,
@@ -68,12 +65,11 @@ class Circuit:
         self.add_transformer(transformer1)
         self.add_transformer(transformer2)
 
-        # Define Conductor & Bundle
+        # Define Conductor & Bundle & Geometry
         conductor = Conductor("Partridge", diam=0.642, GMR=0.0217, resistance=0.385, ampacity=460)
         bundle = Bundle("Double", num_conductors=2, spacing=1.5, conductor=conductor)
-
-        # Define Geometry
         geometry = Geometry("Standard_3Phase", xa=0, ya=0, xb=19.5, yb=0, xc=39, yc=0)
+
         # Define Transmission Lines
         L1 = TransmissionLine("L1", bus2, bus4, bundle, geometry, length=10, s_base=100, frequency=60)
         L2 = TransmissionLine("L2", bus2, bus3, bundle, geometry, length=25, s_base=100, frequency=60)
@@ -83,25 +79,21 @@ class Circuit:
         L6 = TransmissionLine("L6", bus4, bus5, bundle, geometry, length=35, s_base=100, frequency=60)
 
         # Add Transmission Lines to Circuit
-        self.add_transmission_line(L1)
-        self.add_transmission_line(L2)
-        self.add_transmission_line(L3)
-        self.add_transmission_line(L4)
-        self.add_transmission_line(L5)
-        self.add_transmission_line(L6)
+        for line in [L1, L2, L3, L4, L5, L6]:
+            self.add_transmission_line(line)
 
         """ Method 1: Not using pandas. """
         # Extract pu admittance of Transformers
-        y_pu_T1 = transformer1.y_pu_sys
-        y_pu_T2 = transformer2.y_pu_sys
+        y_pu_T1 = self.round_complex(transformer1.y_pu_sys)
+        y_pu_T2 = self.round_complex(transformer2.y_pu_sys)
 
         # Extract pu admittance of Transmission lines
-        y_pu_L1 = L1.y_pu_sys
-        y_pu_L2 = L2.y_pu_sys
-        y_pu_L3 = L3.y_pu_sys
-        y_pu_L4 = L4.y_pu_sys
-        y_pu_L5 = L5.y_pu_sys
-        y_pu_L6 = L6.y_pu_sys
+        y_pu_L1 = self.round_complex(L1.y_pu_sys)
+        y_pu_L2 = self.round_complex(L2.y_pu_sys)
+        y_pu_L3 = self.round_complex(L3.y_pu_sys)
+        y_pu_L4 = self.round_complex(L4.y_pu_sys)
+        y_pu_L5 = self.round_complex(L5.y_pu_sys)
+        y_pu_L6 = self.round_complex(L6.y_pu_sys)
 
         self.y_bus[0][1] = -y_pu_T1
         self.y_bus[1][2] = -y_pu_L2
@@ -163,5 +155,5 @@ class Circuit:
         # print(self.y_bus2)
 
 if __name__ == "__main__":
-    my_circuit = Circuit("example circuit")
+    my_circuit = Circuit("main circuit")
     my_circuit.show_network()
