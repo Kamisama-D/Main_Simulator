@@ -3,6 +3,7 @@ import cmath
 from Classes.bus import Bus
 from Classes.bundle import Bundle
 from Classes.geometry import Geometry
+import pandas as pd
 
 class TransmissionLine:
     """Represents a high-voltage transmission line between two buses."""
@@ -81,18 +82,24 @@ class TransmissionLine:
         return 1 / self.z_series if self.z_series != 0 else complex(0, 0)
 
     def calc_yprim(self):
-        """Calculates the Y-primitive matrix for the transmission line."""
-        return [
-            [self.y_series + (1j * self.b_shunt / 2), -self.y_series],
-            [-self.y_series, self.y_series + (1j * self.b_shunt / 2)]
-        ]
+        """Calculates the Y-primitive matrix in Siemens and returns a numerical Pandas DataFrame."""
+        yprim_matrix = pd.DataFrame(
+            [[self.y_series + (1j * self.b_shunt / 2), -self.y_series],
+             [-self.y_series, self.y_series + (1j * self.b_shunt / 2)]],
+            index=[self.bus1.name, self.bus2.name],
+            columns=[self.bus1.name, self.bus2.name]
+        )
+        return yprim_matrix
 
     def calc_yprim_pu(self):
-        """Calculates the Y-primitive matrix in per-unit."""
-        return [
-            [self.y_pu_sys + (1j * self.b_shunt_pu / 2), -self.y_pu_sys],
-            [-self.y_pu_sys, self.y_pu_sys + (1j * self.b_shunt_pu / 2)]
-        ]
+        """Calculates the Y-primitive matrix in per-unit and returns a numerical Pandas DataFrame."""
+        yprim_pu_matrix = pd.DataFrame(
+            [[self.y_pu_sys + (1j * self.b_shunt_pu / 2), -self.y_pu_sys],
+             [-self.y_pu_sys, self.y_pu_sys + (1j * self.b_shunt_pu / 2)]],
+            index=[self.bus1.name, self.bus2.name],
+            columns=[self.bus1.name, self.bus2.name]
+        )
+        return yprim_pu_matrix
 
     def __repr__(self):
         """Returns a detailed string representation of the TransmissionLine object."""
@@ -124,13 +131,8 @@ class TransmissionLine:
                     b_shunt: {abs(self.b_shunt):.4f} S
                     b_shunt_pu: {abs(self.b_shunt_pu):.4f} pu
                    
-                    --- Y-Primitive Matrix (Yprim) [Siemens] ---
-                    [{self.yprim[0][0]:.4f}, {self.yprim[0][1]:.4f}]
-                    [{self.yprim[1][0]:.4f}, {self.yprim[1][1]:.4f}]
-
-                    --- Y-Primitive Matrix (Yprim_pu) [Per Unit] ---
-                    [{self.yprim_pu[0][0]:.4f}, {self.yprim_pu[0][1]:.4f}]
-                    [{self.yprim_pu[1][0]:.4f}, {self.yprim_pu[1][1]:.4f}]
+                    f"--- Y-Primitive Matrix (Yprim) [Siemens] ---\n{self.yprim}\n\n"
+                    f"--- Y-Primitive Matrix (Yprim_pu) [Per Unit] ---\n{self.yprim_pu}\n"
                 """)
 
 

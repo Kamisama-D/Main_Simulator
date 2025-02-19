@@ -1,5 +1,7 @@
 import cmath
 import math
+import pandas as pd
+import numpy as np
 
 class Transformer:
     """Represents a transformer in a power system network."""
@@ -85,18 +87,24 @@ class Transformer:
         return 1 / self.z_pu_sys if abs(self.z_pu_sys) > 1e-9 else complex(0, 0)
 
     def calc_yprim(self):
-        """Calculates the Y-primitive matrix in siemens."""
-        return [
-            [self.yt, -self.yt],
-            [-self.yt, self.yt]
-        ]
+        """Calculates the Y-primitive matrix in Siemens and returns a numerical Pandas DataFrame."""
+        yprim_matrix = pd.DataFrame(
+            [[self.yt, -self.yt],
+             [-self.yt, self.yt]],
+            index=[self.bus1.name, self.bus2.name],
+            columns=[self.bus1.name, self.bus2.name]
+        )
+        return yprim_matrix
 
     def calc_yprim_pu(self):
-        """Calculates the Y-primitive matrix in per-unit."""
-        return [
-            [self.y_pu_sys, -self.y_pu_sys],
-            [-self.y_pu_sys, self.y_pu_sys]
-        ]
+        """Calculates the Y-primitive matrix in per-unit and returns a numerical Pandas DataFrame."""
+        yprim_pu_matrix = pd.DataFrame(
+            [[self.y_pu_sys, -self.y_pu_sys],
+             [-self.y_pu_sys, self.y_pu_sys]],
+            index=[self.bus1.name, self.bus2.name],
+            columns=[self.bus1.name, self.bus2.name]
+        )
+        return yprim_pu_matrix
 
     def __repr__(self):
         """Returns a string representation of the Transformer object with magnitudes only."""
@@ -125,13 +133,8 @@ class Transformer:
             f"R_pu_sys (Per-Unit System Resistance): {abs(self.r_pu_sys):.4f} pu\n"
             f"X_pu_sys (Per-Unit System Reactance): {abs(self.x_pu_sys):.4f} pu\n\n"
          
-            f"--- Y-Primitive Matrix (Yprim) [Siemens] ---\n"
-            f"[{abs(self.yprim[0][0]):.4f}, {abs(self.yprim[0][1]):.4f}]\n"
-            f"[{abs(self.yprim[1][0]):.4f}, {abs(self.yprim[1][1]):.4f}]\n\n"
-
-            f"--- Y-Primitive Matrix (Yprim_pu) [Per Unit] ---\n"
-            f"[{abs(self.yprim_pu[0][0]):.4f}, {abs(self.yprim_pu[0][1]):.4f}]\n"
-            f"[{abs(self.yprim_pu[1][0]):.4f}, {abs(self.yprim_pu[1][1]):.4f}]\n"
+            f"--- Y-Primitive Matrix (Yprim) [Siemens] ---\n{self.yprim}\n\n"
+            f"--- Y-Primitive Matrix (Yprim_pu) [Per Unit] ---\n{self.yprim_pu}\n"
         )
 
 
