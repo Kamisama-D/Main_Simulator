@@ -8,7 +8,7 @@ import pandas as pd
 class TransmissionLine:
     """Represents a high-voltage transmission line between two buses."""
 
-    def __init__(self, name: str, bus1, bus2, bundle, geometry, length: float, s_base: float, frequency=float):
+    def __init__(self, name: str, bus1, bus2, bundle, geometry, length: float, s_base: float, frequency:float):
         """
         Initializes a TransmissionLine object.
 
