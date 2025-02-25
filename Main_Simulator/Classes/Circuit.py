@@ -3,6 +3,7 @@ import pandas as pd
 from Classes.transformer import Transformer
 from Classes.transmission_line import TransmissionLine
 
+
 class Circuit:
     """Represents a power system circuit, storing all components and managing configuration."""
 
@@ -12,9 +13,8 @@ class Circuit:
         self.buses = {}  # Stores Bus objects
         self.transformers = {}  # Stores Transformer objects
         self.transmission_lines = {}  # Stores TransmissionLine objects
-        self.y_bus = [[0 for _ in range(7)] for _ in range(7)] # Method 1: Not using pandas.
-        #self.y_bus2 = pd.DataFrame([[0 for _ in range(7)] for _ in range(7)], columns = list('1234567'), index = list('1234567')) # Method 2: Using pandas.
-        self.calc_ybus()
+
+        self.ybus = None
 
     def add_bus(self, bus):
         """Adds a bus object to the circuit. Raises an error if the bus already exists."""
@@ -65,6 +65,19 @@ class Circuit:
                 raise ValueError(f"Numerical instability detected: Bus {bus} has no self-admittance.")
 
         return self.ybus
+
+    def show_network(self):
+        """Displays the network configuration."""
+        print(f"\nCircuit Name: {self.name}")
+        print("\n--- Buses ---")
+        for bus in self.buses.values():
+            print(f"{bus.name} - {bus.base_kv} kV")
+        print("\n--- Transformers ---")
+        for transformer in self.transformers.values():
+            print(f"{transformer.name}: {transformer.bus1.name} ↔ {transformer.bus2.name}")
+        print("\n--- Transmission Lines ---")
+        for line in self.transmission_lines.values():
+            print(f"{line.name}: {line.bus1.name} ↔ {line.bus2.name}")
 
     def show_ybus(self):
         """Displays the Ybus matrix if it has been calculated."""
