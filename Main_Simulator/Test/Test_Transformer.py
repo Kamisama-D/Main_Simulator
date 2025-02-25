@@ -1,5 +1,7 @@
 from Classes.bus import Bus
 from Classes.transformer import Transformer
+import numpy as np
+import pandas as pd
 
 def test_transformer_class():
     """Function to test the Transformer class."""
@@ -39,19 +41,16 @@ def test_transformer_class():
     print(f"R_pu_sys (Per-Unit System Resistance): {transformer.z_pu_sys.real:.4f} pu")
     print(f"X_pu_sys (Per-Unit System Reactance): {transformer.z_pu_sys.imag:.4f} pu")
 
-    # Print Y-primitive matrix in Siemens
+    # Print Y-Primitive Matrix (Siemens)
     print("\n--- Y-Primitive Matrix (Yprim) [Siemens] ---")
-    yprim = transformer.calc_yprim()
-    for row in yprim:
-        print([round(val.real, 4) + round(val.imag, 4) * 1j for val in row])  # Ensure correct negative signs
+    print(transformer.yprim)
 
-    # Print Y-primitive matrix in Per-Unit
+    # Print Y-Primitive Matrix (Per Unit)
     print("\n--- Y-Primitive Matrix (Yprim_pu) [Per Unit] ---")
-    yprim_pu = transformer.calc_yprim_pu()
-    for row in yprim_pu:
-        print([round(val.real, 4) + round(val.imag, 4) * 1j for val in row])
+    print(transformer.yprim_pu)
 
-    print("\n✅ All Transformer class tests passed!")
+
+print("\n✅ All Transformer class tests passed!")
 
 
 if __name__ == "__main__":

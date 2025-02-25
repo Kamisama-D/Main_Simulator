@@ -5,6 +5,9 @@ from Classes.transmission_line import TransmissionLine
 from Classes.bundle import Bundle
 from Classes.geometry import Geometry
 from Classes.conductor import Conductor
+import pandas as pd
+pd.set_option('display.max_columns', None)
+pd.set_option('display.width', 1000)
 
 #User defined power base and frequency
 s_base=100 #MVA
@@ -94,12 +97,14 @@ def display_circuit():
         print(f"  - X_pu_sys: {transformer.z_pu_sys.imag:.4f} pu")
 
         print(f"\n  --- Y-Primitive Matrix (Yprim) [Siemens] ---")
-        print(f"  [{transformer.yprim[0][0]:.4f}, {transformer.yprim[0][1]:.4f}]")
-        print(f"  [{transformer.yprim[1][0]:.4f}, {transformer.yprim[1][1]:.4f}]")
+        # print(f"  [{transformer.yprim.iloc[0, 0]:.4f}, {transformer.yprim.iloc[0, 1]:.4f}]")
+        # print(f"  [{transformer.yprim.iloc[1, 0]:.4f}, {transformer.yprim.iloc[1, 1]:.4f}]")
+        print(transformer.yprim)
 
         print(f"\n  --- Y-Primitive Matrix (Yprim_pu) [Per Unit] ---")
-        print(f"  [{transformer.yprim_pu[0][0]:.4f}, {transformer.yprim_pu[0][1]:.4f}]")
-        print(f"  [{transformer.yprim_pu[1][0]:.4f}, {transformer.yprim_pu[1][1]:.4f}]")
+        # print(f"  [{transformer.yprim_pu.iloc[0, 0]:.4f}, {transformer.yprim_pu.iloc[0, 1]:.4f}]")
+        # print(f"  [{transformer.yprim_pu.iloc[1, 0]:.4f}, {transformer.yprim_pu.iloc[1, 1]:.4f}]")
+        print(transformer.yprim_pu)
 
     # Display Transmission Lines
     for name, line in circuit.transmission_lines.items():
@@ -130,12 +135,18 @@ def display_circuit():
         print(f"  - b_shunt_pu: {line.b_shunt / line.y_base_sys:.4f} pu")
 
         print(f"\n  --- Y-Primitive Matrix (Yprim) [Siemens] ---")
-        print(f"  [{line.yprim[0][0]:.4f}, {line.yprim[0][1]:.4f}]")
-        print(f"  [{line.yprim[1][0]:.4f}, {line.yprim[1][1]:.4f}]")
+        # print(f"  [{line.yprim.iloc[0, 0]:.4f}, {line.yprim.iloc[0, 1]:.4f}]")
+        # print(f"  [{line.yprim.iloc[1, 0]:.4f}, {line.yprim.iloc[1, 1]:.4f}]")
+        print(line.yprim)
 
         print(f"\n  --- Y-Primitive Matrix (Yprim_pu) [Per Unit] ---")
-        print(f"  [{line.yprim_pu[0][0]:.4f}, {line.yprim_pu[0][1]:.4f}]")
-        print(f"  [{line.yprim_pu[1][0]:.4f}, {line.yprim_pu[1][1]:.4f}]")
+        # print(f"  [{line.yprim_pu.iloc[0, 0]:.4f}, {line.yprim_pu.iloc[0, 1]:.4f}]")
+        # print(f"  [{line.yprim_pu.iloc[1, 0]:.4f}, {line.yprim_pu.iloc[1, 1]:.4f}]")
+        print(line.yprim_pu)
+
+    # Display Circuit Ybus
+    circuit.calc_ybus()
+    circuit.show_ybus()
 
 # Run Display Function
 display_circuit()

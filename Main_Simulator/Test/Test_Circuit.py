@@ -1,5 +1,6 @@
 # Import necessary classes
 from Classes.Circuit import Circuit
+from Classes.Seven_Bus_System import s_base
 from Classes.bus import Bus
 from Classes.transformer import Transformer
 from Classes.transmission_line import TransmissionLine
@@ -27,7 +28,7 @@ def test_circuit_class():
     # 3.1 Create and Add buses
     bus1 = Bus("Bus1", 230)
     bus2 = Bus("Bus2", 115)
-    bus3 = Bus("Bus3", 500)
+    bus3 = Bus("Bus3", 115)
     circuit1.add_bus(bus1)
     circuit1.add_bus(bus2)
     circuit1.add_bus(bus3)
@@ -55,7 +56,7 @@ def test_circuit_class():
     #     print(f"\n✅ Duplicate Bus Error Caught: {e}")
 
     # 3.2 Create and Add a Transformer
-    transformer = Transformer("T1", bus1, bus2, power_rating=100, impedance_percent=10, x_over_r_ratio=10)
+    transformer = Transformer("T1", bus1, bus2, power_rating=100, impedance_percent=10, x_over_r_ratio=10, s_base=100)
     circuit1.add_transformer(transformer)
     #circuit.add_transformer(transformer)
 
@@ -78,7 +79,7 @@ def test_circuit_class():
     bundle = Bundle("Double", num_conductors=2, spacing=10.0, conductor=conductor)
     geometry = Geometry("Standard_3Phase", xa=0, ya=0, xb=5, yb=8, xc=10, yc=0)
 
-    transmission_line = TransmissionLine("Line1", bus2, bus3, bundle, geometry, length=10)
+    transmission_line = TransmissionLine("Line1", bus2, bus3, bundle, geometry, length=10, s_base=100, frequency=60)
     # circuit.add_transmission_line(transmission_line)
     circuit1.add_transmission_line(transmission_line)
 
@@ -100,6 +101,10 @@ def test_circuit_class():
     print("\n--- Circuit Network Configuration ---")
     circuit1.show_network()
     #circuit.show_network()
+
+    # Step 5: Show ybus
+    circuit1.calc_ybus()
+    circuit1.show_ybus()
 
     # Assertions to validate correctness
     assert circuit1.name == "Test Circuit", "Circuit name mismatch"
