@@ -87,3 +87,5 @@ class Circuit:
             print("\n--- Ybus Admittance Matrix ---")
             #print(self.ybus.map(lambda x: f"{x.real:.6f} {'+' if x.imag >= 0 else '-'} j{x.imag:.6f}"))
             print(self.ybus)
+
+
