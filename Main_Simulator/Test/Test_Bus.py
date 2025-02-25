@@ -5,9 +5,9 @@ def test_bus_class():
     """Function to test the Bus class."""
 
     # Create instances of Bus
-    bus1 = Bus("Bus 1", 20)
-    bus2 = Bus("Bus 2", 230)
-    bus3 = Bus("Bus 3", 500)
+    bus1 = Bus("Bus 1", 20, 'Slack Bus')
+    bus2 = Bus("Bus 2", 230, 'PQ Bus', P=50, Q=30)
+    bus3 = Bus("Bus 3", 500, 'PV Bus', P=100)
 
     # Print details of each bus to verify attributes
     print(bus1)  # Expected: Bus(name='Bus 1', base_kv=20, index=0)
