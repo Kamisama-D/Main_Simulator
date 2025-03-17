@@ -1,5 +1,7 @@
-# Import the Bus class from the bus module
 from Classes.bus import Bus
+from Classes.system_setting import Settings
+import numpy as np
+import pandas as pd
 
 def test_bus_class():
     """Function to test the Bus class."""
@@ -70,7 +72,40 @@ def test_bus_class():
 
     print("All Bus class tests passed!")
 
+def test_power_mismatch():
+    # Reset Bus static variables to allow creation of new buses without conflicts.
+    Bus.count = 0
+    Bus.slack_assigned = False
+
+    # Create three buses: one Slack, one PQ bus, and one PV bus.
+    bus_slack = Bus("Slack Bus", 230, 'Slack Bus')
+    bus_pq = Bus("PQ Bus", 230, 'PQ Bus', P=100, Q=50)
+    bus_pv = Bus("PV Bus", 230, 'PV Bus', P=150)
+
+    # Construct a simple Ybus matrix for a 3-bus system.
+    bus_names = [bus_slack.name, bus_pq.name, bus_pv.name]
+    Ybus = pd.DataFrame([[0+0j, 0+0j, 0+0j],
+                         [0+0j, 0+0j, 0+0j],
+                         [0+0j, 0+0j, 0+0j]],
+                        index=bus_names, columns=bus_names)
+
+    # Define the voltage dictionary as (magnitude, angle_in_degrees)
+    voltages = {bus_slack.name: (1.0, 0.0),
+                bus_pq.name: (1.0, 0.0),
+                bus_pv.name: (1.0, 0.0)}
+
+    settings = Settings()
+    mismatch = settings.compute_power_mismatch([bus_slack, bus_pq, bus_pv], Ybus, voltages)
+
+    # Expected mismatch: ΔP = 100, ΔQ = 50.
+    expected_mismatch = np.array([100, 150, 50])
+
+    print("Computed mismatch:", mismatch)
+    print("Expected mismatch:", expected_mismatch)
+    assert np.allclose(mismatch, expected_mismatch), "Mismatch values do not match expected values."
+    print("Power mismatch test passed!")
+
 if __name__ == "__main__":
     test_bus_class()
-
+    test_power_mismatch()
 
