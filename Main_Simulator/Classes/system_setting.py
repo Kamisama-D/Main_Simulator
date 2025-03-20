@@ -17,7 +17,6 @@ class SystemSettings:
         self.base_power = base_power  # MVA
 
 
-
     def __repr__(self):
         """Returns a formatted string representation of the SystemSettings object."""
         return (f"SystemSettings(frequency={self.frequency} Hz, base_power={self.base_power} MVA, "

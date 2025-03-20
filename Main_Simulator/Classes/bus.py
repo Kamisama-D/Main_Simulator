@@ -2,7 +2,7 @@ class Bus:
     count = 0
     slack_assigned = False  # Ensures only one slack bus is assigned
 
-    def __init__(self, name: str, base_kv: float, P: float = None, Q: float = None, vpu: float = None, delta: float = None):
+    def __init__(self, name: str, base_kv: float, vpu: float = None, delta: float = None):
         """
         Initializes a Bus object and classifies its type automatically.
         """
@@ -11,71 +11,76 @@ class Bus:
         self.index = Bus.count
         Bus.count += 1
 
-        self.P = P
-        self.Q = Q
-        self.vpu = vpu
-        self.delta = delta
+        self.vpu = vpu if vpu is not None else 1.0  # Default voltage magnitude
+        self.delta = delta if delta is not None else 0.0  # Default voltage angle
 
-        self.Q_min = None
-        self.Q_max = None
+        self.generators = []  # List of connected generators
+        self.loads = []  # List of connected loads
 
-        # Automatically classify bus type
-        self.classify_bus_type()
+        # Assign initial bus type dynamically
+        self.bus_type = None
+        self.update_bus_type()
 
-    def classify_bus_type(self):
+    # def update_bus_type(self):
+    #     """
+    #     Determines the bus type dynamically based on connected components.
+    #     - Slack Bus: Manually assigned, only one allowed.
+    #     - PV Bus: If a generator is connected.
+    #     - PQ Bus: If only loads are connected.
+    #     """
+    #     if not Bus.slack_assigned and self.vpu == 1.0 and self.delta == 0.0:
+    #         self.bus_type = "Slack Bus"
+    #         Bus.slack_assigned = True
+    #     elif self.generators:
+    #         self.bus_type = "PV Bus"
+    #     else:
+    #         self.bus_type = "PQ Bus"
+
+    def update_bus_type(self):
         """
-        Determines the bus type based on provided attributes:
-        - Slack Bus: Defined by user with vpu=1.0, delta=0.0.
-        - PV Bus: Has P and vpu defined.
-        - PQ Bus: Has P and Q defined.
+        Determines the bus type dynamically based on connected components.
+        - Slack Bus: Manually assigned, only one allowed.
+        - PV Bus: If a generator is connected.
+        - PQ Bus: If only loads are connected.
         """
-        if self.vpu == 1.0 and self.delta == 0.0 and not Bus.slack_assigned:
+        if not Bus.slack_assigned and self.vpu == 1.0 and self.delta == 0.0:
             self.bus_type = "Slack Bus"
             Bus.slack_assigned = True
-            print(f"[INFO] Bus '{self.name}' classified as Slack Bus.")
-
-        elif self.P is not None and self.vpu is not None:
+        elif len(self.generators) > 0:  # ✅ Ensure generators are correctly assigned
             self.bus_type = "PV Bus"
-            self.Q = None  # Q will be calculated
-            self.Q_min = -0.4 * self.P  # Assuming ±40% limit
-            self.Q_max = 0.4 * self.P
-            self.delta = 0.0  # Initial guess for voltage angle
-            print(f"[INFO] Bus '{self.name}' classified as PV Bus.")
-
-        elif self.P is not None and self.Q is not None:
-            self.bus_type = "PQ Bus"
-            self.vpu = 1.0  # Initial guess for voltage magnitude
-            self.delta = 0.0  # Initial guess for voltage angle
-            print(f"[INFO] Bus '{self.name}' classified as PQ Bus.")
-
         else:
-            raise ValueError(f"Bus '{self.name}' has insufficient inputs to classify its type.")
+            self.bus_type = "PQ Bus"
 
-    def check_reactive_limits(self):
-        """
-        Enforces Q limits for PV Bus and switches to PQ if exceeded.
-        """
-        if self.bus_type == "PV Bus" and self.Q is not None:
-            if self.Q > self.Q_max:
-                print(f"[WARNING] Bus '{self.name}' exceeded Q_max ({self.Q_max}). Switching to PQ Bus.")
-                self.Q = self.Q_max
-                self.bus_type = "PQ Bus"
+        # ✅ Debug to confirm correct classification
+        print(f"[DEBUG] Bus {self.name} classified as {self.bus_type}, Generators: {len(self.generators)}")
 
-            elif self.Q < self.Q_min:
-                print(f"[WARNING] Bus '{self.name}' went below Q_min ({self.Q_min}). Switching to PQ Bus.")
-                self.Q = self.Q_min
-                self.bus_type = "PQ Bus"
+    def add_generator(self, generator):
+        """Adds a generator to the bus and updates the bus type."""
+        self.generators.append(generator)
+        self.update_bus_type()
+
+    def add_load(self, load):
+        """Adds a load to the bus and updates the bus type."""
+        self.loads.append(load)
+        self.update_bus_type()
+
+    def total_real_power(self):
+        """Calculates total real power at the bus from all connected loads."""
+        return sum(load.real_power for load in self.loads)
+
+    def total_reactive_power(self):
+        """Calculates total reactive power at the bus from all connected loads."""
+        return sum(load.reactive_power for load in self.loads)
 
     def __repr__(self):
         """Returns a formatted string representation of the Bus object."""
-        P_value = self.P if self.P is not None else "Not Calculated"
-        Q_value = self.Q if self.Q is not None else "Not Calculated"
-        Q_min_value = self.Q_min if self.Q_min is not None else "Not Applicable"
-        Q_max_value = self.Q_max if self.Q_max is not None else "Not Applicable"
-
         return (f"Bus(name='{self.name}', base_kv={self.base_kv}, index={self.index}, "
                 f"vpu={self.vpu}, delta={self.delta}, bus_type='{self.bus_type}', "
-                f"P={P_value}, Q={Q_value}, Q_min={Q_min_value}, Q_max={Q_max_value})")
+                f"total_real_power={self.total_real_power()} MW, total_reactive_power={self.total_reactive_power()} Mvar)")
+
+
+
+
 
 
 
