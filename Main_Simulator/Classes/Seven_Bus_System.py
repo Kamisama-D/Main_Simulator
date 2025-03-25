@@ -20,17 +20,17 @@ system_settings = SystemSettings(frequency=60, base_power=100)
 circuit = Circuit("Seven Bus Power System", system_settings)
 
 # Retrieve system settings from the circuit
-s_base = circuit.get_base_power()
-frequency = circuit.get_frequency()
+s_base = system_settings.base_power
+frequency = system_settings.frequency
 
 # Define Buses
-bus1 = Bus("Bus 1", 20, vpu=1.0, delta=0.0)  # Slack Bus
+bus1 = Bus("Bus 1", 20)  # Slack Bus
 bus2 = Bus("Bus 2", 230)
 bus3 = Bus("Bus 3", 230)
 bus4 = Bus("Bus 4", 230)
 bus5 = Bus("Bus 5", 230)
 bus6 = Bus("Bus 6", 230)
-bus7 = Bus("Bus 7", 18, vpu=1.0)  # PV Bus
+bus7 = Bus("Bus 7", 18)  # PV Bus
 
 # Add Buses to Circuit
 for bus in [bus1, bus2, bus3, bus4, bus5, bus6, bus7]:
@@ -43,20 +43,16 @@ load5 = Load("Load 5", bus5, real_power=100, reactive_power=65)
 
 # Add Loads to Circuit
 for load in [load3, load4, load5]:
-    circuit.add_load(load)
+    circuit.add_load(load.name, load.bus.name, load.real_power, load.reactive_power)
 
 # Define Generators
-gen1 = Generator("G1", bus1, voltage_setpoint=1.0, mw_setpoint=0)  # Slack Generator
-gen2 = Generator("G2", bus7, voltage_setpoint=1.0, mw_setpoint=200)
+circuit.add_generator("G1", "Bus 1", per_unit=1.0, real_power=0)     # Slack
+circuit.add_generator("G2", "Bus 7", per_unit=1.0, real_power=200)   # PV
 
-# Add Generators to Circuit
-for generator in [gen1, gen2]:
-    circuit.add_generator(generator)
 
 # Define Transformers
 transformer1 = Transformer("T1", bus1, bus2, power_rating=125, impedance_percent=8.5, x_over_r_ratio=10, s_base=s_base)
 transformer2 = Transformer("T2", bus7, bus6, power_rating=200, impedance_percent=10.5, x_over_r_ratio=12, s_base=s_base)
-
 
 # Add Transformers to Circuit
 for transformer in [transformer1, transformer2]:
@@ -79,7 +75,6 @@ lines = [
     TransmissionLine("L6", bus4, bus5, bundle, geometry, length=35, s_base=s_base, frequency=frequency)
 ]
 
-
 # Add Transmission Lines to Circuit
 for line in lines:
     circuit.add_transmission_line(line)
@@ -88,16 +83,14 @@ for line in lines:
 circuit.calc_ybus()
 circuit.show_ybus()
 
-
 # Run Power Flow Solver
-power_flow_solver = PowerFlowSolver(1,circuit)
-
+power_flow_solver = PowerFlowSolver(1, circuit)
 
 # Show key power flow vectors
 print("\nVector x (State Variables):", power_flow_solver.initialize_x())
 print("\nVector y (Expected Power Injections):", power_flow_solver.initialize_y())
 print("\nVector yx (Calculated Power Injections):", power_flow_solver.calc_Px(), power_flow_solver.calc_Qx())
-print("\nMismatch Vector Δy:", power_flow_solver.calculate_power_mismatch(power_flow_solver.initialize_y(), power_flow_solver.calculate_yx(power_flow_solver.calc_Px(), power_flow_solver.calc_Qx())))
+print("\nMismatch Vector Δy:", power_flow_solver.del_y)
 
 
 

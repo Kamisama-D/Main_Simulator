@@ -6,33 +6,35 @@ from system_setting import SystemSettings
 
 
 class PowerFlowSolver:
-    def __init__(self, solver: int, circuit, do_one_iteration: bool = False):
+    def __init__(self, solver: int, circuit: Circuit, do_one_iteration: bool = False):
         self.solver = solver
         self.Circuit = circuit
+        self.Circuit.calc_ybus()
 
-        # Debugging bus type classification
-        print("\n[DEBUG] Bus Type Classification (Before Fix):")
-        for bus in self.Circuit.bus_order():
-            print(f"  {bus}: {self.Circuit.bus_type[bus]}")
+        # ✅ Verify the bus classifications before proceeding
+        print("\n[DEBUG] Bus Type Classification (Used in PowerFlowSolver):")
+        for bus_name, bus in self.Circuit.buses.items():
+            print(f"  - {bus_name}: {bus.bus_type}")
 
         self.flat_start()
 
         # Solve Method
         self.initialize_x()
-        self.y = self.initialize_y()
+        y = self.initialize_y()
+
 
         #Real Power
         Px = self.calc_Px()
+        Px = {bus: float(Px[bus]) for bus in Px}
 
 
         #Reactive Power
         Qx = self.calc_Qx()
-
+        Qx = {bus: float(Qx[bus]) for bus in Qx}
 
         #Mistmatch
-        self.yx = self.calculate_yx()
-        self.del_y = self.calculate_power_mismatch(self.y,self.yx)
-
+        yx = self.calculate_yx(Px, Qx)
+        self.del_y = self.calculate_power_mismatch(y, yx)
 
         # Compute Jacobian for first iteration
         self.J1 = self.calculate_J1()
@@ -41,8 +43,8 @@ class PowerFlowSolver:
         self.J4 = self.calculate_J4()
         self.J = self.construct_jacobian(self.J1, self.J2, self.J3, self.J4)
 
-        #Change in the angle and voltage
-        self.update_angles_voltages()
+
+
 
     def flat_start(self):
         """Initializes flat start with delta=0 and voltage=1 p.u."""
@@ -51,17 +53,13 @@ class PowerFlowSolver:
 
     def initialize_x(self):
         """Constructs state variable vector x (delta and voltage magnitudes)."""
-        delta_vector = [
-            self.delta[bus] for bus in self.Circuit.bus_order()
-            if self.Circuit.bus_type[bus] != 'Slack Bus'
-        ]  # Excludes δ1 (Slack Bus)
+        delta_vector = np.array(list(self.delta.values()))
+        voltage_vector = np.array(list(self.voltage.values()))
+        print("[DEBUG] delta:", self.delta)
+        print("[DEBUG] voltage:", self.voltage)
 
-        voltage_vector = [
-            self.voltage[bus] for bus in self.Circuit.bus_order()
-            if self.Circuit.bus_type[bus] not in ['Slack Bus', 'PV Bus']
-        ]  # Excludes V1 (Slack Bus) and V7 (PV bus)
+        x = np.concatenate((delta_vector, voltage_vector))
 
-        x = np.array(delta_vector + voltage_vector, dtype=float).reshape(-1, 1)
 
         # Debugging output
         print(f"[DEBUG] x initialized with shape {x.shape}")
@@ -72,216 +70,205 @@ class PowerFlowSolver:
         """Initializes y vector by extracting per-unit real and reactive power values, excluding Slack and PV buses."""
 
         # Extract per-unit real and reactive power values
-        real_power_vector = np.array(list(self.Circuit.real_power_vector().values()), dtype=float) / float(
-            self.Circuit.get_base_power())
-        reactive_power_vector = np.array(list(self.Circuit.reactive_power_vector().values()), dtype=float) / float(
-            self.Circuit.get_base_power())
+        real_power_vector = np.array(list(self.Circuit.real_power_vector().values())) /(self.Circuit.get_base_power())
+        reactive_power_vector = np.array(list(self.Circuit.reactive_power_vector().values())) / (self.Circuit.get_base_power())
 
         # Initialize y vectors
         y_real = []
         y_reactive = []
 
-        # Collect real power values for non-slack buses (excluding P1)
         for bus in self.Circuit.bus_order():
             if self.Circuit.bus_type[bus] != "Slack Bus":  # Exclude Slack bus (P1)
                 y_real.append(real_power_vector[self.Circuit.bus_order().index(bus)])
 
-        # Collect reactive power values for PQ buses (excluding Q1, Q7)
         for bus in self.Circuit.bus_order():
-            if self.Circuit.bus_type[bus] not in ["Slack Bus", "PV Bus"]:  # Exclude Slack and PV buses
+            if self.Circuit.bus_type[bus] not in ["Slack Bus", "PV Bus"]:
                 y_reactive.append(reactive_power_vector[self.Circuit.bus_order().index(bus)])
 
-        # Convert lists to NumPy array with correct shape (11, 1)
-        y = np.array(y_real + y_reactive, dtype=float).reshape(-1, 1)
+        y = np.concatenate((y_real,y_reactive))
 
-        print(f"DEBUG: y initialized with shape {y.shape}")  # Debugging print
+        print("\n--- INITIALIZED y (Specified Power Vector) ---")
+        for i, val in enumerate(y):
+            print(f"y[{i}] = {val:.6f}")
+        print(f"[DEBUG] y shape = {y.shape}\n")
         return y
 
-    def calculate_yx(self):
+    def calculate_yx(self, Px, Qx):
         """
-        Calculates expected power injections yx (P and Q) using Ybus and voltage values,
-        excluding P1, Q1, and Q7.
+        Calculates the expected power injection vector yx = [P, Q] for all buses,
+        using explicitly provided Px and Qx dictionaries. Assumes all buses are included.
         """
-        # Compute voltage vector
-        V = np.array([self.voltage[bus] * np.exp(1j * self.delta[bus]) for bus in self.Circuit.bus_order()])
+        yx_P = [Px[bus] for bus in self.Circuit.bus_order()]
+        yx_Q = [Qx[bus] for bus in self.Circuit.bus_order()]
 
-        # Convert Ybus DataFrame to NumPy array
-        Ybus = self.Circuit.ybus.values
+        yx = np.concatenate((yx_P, yx_Q))
 
-        # Compute power injections
-        S = V * np.dot(Ybus, np.conjugate(V))
-        P = S.real  # Active power
-        Q = S.imag  # Reactive power
-
-        # Filter out P1, Q1, and Q7
-        bus_order = self.Circuit.bus_order()
-        P_filtered = [P[i] for i, bus in enumerate(bus_order) if bus not in ["Bus 1"]]
-        Q_filtered = [Q[i] for i, bus in enumerate(bus_order) if bus not in ["Bus 1", "Bus 7"]]
-
-        # Concatenate filtered active and reactive power values
-        yx = np.concatenate((P_filtered, Q_filtered))
+        print("\n--- CALCULATED yx (Injected Power Vector) ---")
+        for i, val in enumerate(yx):
+            print(f"yx[{i}] = {val:.6f}")
+        print(f"[DEBUG] yx shape = {yx.shape}\n")
 
         return yx
 
     def calculate_power_mismatch(self, y, yx):
-        y = np.array(y).reshape(-1, 1)  # Ensure proper shape
-        yx = np.array(yx).reshape(-1, 1)  # Ensure proper shape
-
-        if y.shape != yx.shape:
-            raise ValueError(f"Shape mismatch: y has shape {y.shape}, yx has shape {yx.shape}")
-
+        y = np.array(y)
+        yx = np.array(yx)
         del_y = y - yx
+        print("\n--- MISMATCH Vector Δy = y - yx ---")
+        for i, val in enumerate(del_y):
+            print(f"Δy[{i}] = {val:.6f}")
+        print(f"[DEBUG] del_y shape = {del_y.shape}\n")
+
         return del_y
 
     def calc_Px(self):
-        """Computes real power (P) injections for each bus."""
-        Px = {bus: 0.0 for bus in self.Circuit.bus_order()}
-        Power_tolerance = 0.001  # Define numerical tolerance
+        """Computes real power (P) injections using polar form."""
+        Px = {}
+        bus_order = self.Circuit.bus_order()
 
-        for k, bus_k in enumerate(self.Circuit.bus_order()):
+        for bus_k in bus_order:
+            V_k = self.voltage[bus_k]
+            δ_k = self.delta[bus_k]
             P_k = 0.0
-            for j, bus_j in enumerate(self.Circuit.bus_order()):
-                Y_kj = self.Circuit.ybus.at[bus_k, bus_j]
-                P_k += self.voltage[bus_k] * self.voltage[bus_j] * abs(Y_kj) * np.cos(
-                    self.delta[bus_k] - self.delta[bus_j] - np.angle(Y_kj)
-                )
 
-            # Enforce tolerance: If P_k is too small, replace with a default value (6.0 in your case)
-            Px[bus_k] = P_k if abs(P_k) > Power_tolerance else 6.0
+            for bus_n in bus_order:
+                V_n = self.voltage[bus_n]
+                δ_n = self.delta[bus_n]
+                Y_kn = self.Circuit.ybus.at[bus_k, bus_n]
+                θ_kn = np.angle(Y_kn)
+
+                P_k += V_k * V_n * abs(Y_kn) * np.cos(δ_k - δ_n - θ_kn)
+
+            Px[bus_k] = P_k
 
         return Px
 
     def calc_Qx(self):
-        """Computes reactive power (Q) injections for each bus."""
-        Qx = {bus: 0.0 for bus in self.Circuit.bus_order()}
-        Power_tolerance = 0.001  # Define numerical tolerance
+        """Computes reactive power (Q) injections using polar form."""
+        Qx = {}
+        bus_order = self.Circuit.bus_order()
 
-        for k, bus_k in enumerate(self.Circuit.bus_order()):
+        for bus_k in bus_order:
+            V_k = self.voltage[bus_k]
+            δ_k = self.delta[bus_k]
             Q_k = 0.0
-            for j, bus_j in enumerate(self.Circuit.bus_order()):
-                Y_kj = self.Circuit.ybus.at[bus_k, bus_j]
-                Q_k += self.voltage[bus_k] * self.voltage[bus_j] * abs(Y_kj) * np.sin(
-                    self.delta[bus_k] - self.delta[bus_j] - np.angle(Y_kj)
-                )
 
-            # Enforce tolerance: If Q_k is too small, replace with a default value (6.0 in your case)
-            Qx[bus_k] = Q_k if abs(Q_k) > Power_tolerance else 6.0
+            for bus_n in bus_order:
+                V_n = self.voltage[bus_n]
+                δ_n = self.delta[bus_n]
+                Y_kn = self.Circuit.ybus.at[bus_k, bus_n]
+                θ_kn = np.angle(Y_kn)
+
+                Q_k += V_k * V_n * abs(Y_kn) * np.sin(δ_k - δ_n - θ_kn)
+
+            Qx[bus_k] = Q_k
 
         return Qx
 
     def calculate_J1(self):
-        """Computes J1: Partial derivatives of active power with respect to voltage angles."""
-
-        # Exclude Slack Bus (P1 derivatives removed)
-        bus_order = [bus for bus in self.Circuit.bus_order() if bus not in ["Bus 1"]]
-        n = len(bus_order)  # Should be 6 (P2 to P7)
-        J1 = np.zeros((n, n), dtype=float)
+        """Full J1: ∂P/∂δ for all buses including Slack and PV."""
+        bus_order = self.Circuit.bus_order()
+        n = len(bus_order)
+        J1 = np.zeros((n, n))
 
         for k, bus_k in enumerate(bus_order):
+            V_k = self.voltage[bus_k]
+            δ_k = self.delta[bus_k]
             for j, bus_j in enumerate(bus_order):
+                V_j = self.voltage[bus_j]
+                δ_j = self.delta[bus_j]
                 Y_kj = self.Circuit.ybus.at[bus_k, bus_j]
                 θ_kj = np.angle(Y_kj)
-                V_k = self.voltage[bus_k]
-                δ_k = self.delta[bus_k]
 
-                if k == j:  # Diagonal elements J1_kk
+                if k == j:
                     J1[k, j] = -V_k * sum(
                         self.voltage[bus_m] * abs(self.Circuit.ybus.at[bus_k, bus_m]) *
                         np.sin(δ_k - self.delta[bus_m] - np.angle(self.Circuit.ybus.at[bus_k, bus_m]))
-                        for bus_m in self.Circuit.bus_order() if bus_m not in ["Bus 1", bus_k]  # Exclude slack bus
+                        for bus_m in bus_order
                     )
-                else:  # Off-diagonal elements J1_kn
-                    V_n = self.voltage[bus_j]
-                    δ_n = self.delta[bus_j]
-                    J1[k, j] = V_k * V_n * abs(Y_kj) * np.sin(δ_k - δ_n - θ_kj)
-
+                else:
+                    J1[k, j] = V_k * V_j * abs(Y_kj) * np.sin(δ_k - δ_j - θ_kj)
         return J1
 
     def calculate_J2(self):
-        """Computes J2: Partial derivatives of active power with respect to voltage magnitudes."""
-
-        bus_order = [bus for bus in self.Circuit.bus_order() if bus not in ["Bus 1"]]
-        voltage_order = [bus for bus in self.Circuit.bus_order() if bus not in ["Bus 1", "Bus 7"]]
-        n = len(bus_order)  # 6 (P2 to P7)
-        m = len(voltage_order)  # 5 (V2 to V6)
-
-        J2 = np.zeros((n, m), dtype=float)
+        """Full J2: ∂P/∂V for all buses including Slack and PV."""
+        bus_order = self.Circuit.bus_order()
+        n = len(bus_order)
+        J2 = np.zeros((n, n))
 
         for k, bus_k in enumerate(bus_order):
-            for j, bus_j in enumerate(voltage_order):
+            V_k = self.voltage[bus_k]
+            δ_k = self.delta[bus_k]
+            for j, bus_j in enumerate(bus_order):
+                V_j = self.voltage[bus_j]
+                δ_j = self.delta[bus_j]
                 Y_kj = self.Circuit.ybus.at[bus_k, bus_j]
                 θ_kj = np.angle(Y_kj)
-                V_k = self.voltage[bus_k]
-                V_j = self.voltage[bus_j]
 
                 if k == j:
-                    J2[k, j] = V_k * abs(Y_kj) * np.cos(θ_kj)
+                    J2[k, j] = sum(
+                        abs(self.Circuit.ybus.at[bus_k, bus_m]) *
+                        np.cos(δ_k - self.delta[bus_m] - np.angle(self.Circuit.ybus.at[bus_k, bus_m])) *
+                        self.voltage[bus_m]
+                        for bus_m in bus_order
+                    )
                 else:
-                    J2[k, j] = V_k * V_j * abs(Y_kj) * np.cos(self.delta[bus_k] - self.delta[bus_j] - θ_kj)
-
+                    J2[k, j] = V_k * abs(Y_kj) * np.cos(δ_k - δ_j - θ_kj)
         return J2
 
     def calculate_J3(self):
-        """Computes J3: Partial derivatives of reactive power with respect to voltage angles."""
+        """Full J3: ∂Q/∂δ for all buses including Slack and PV."""
+        bus_order = self.Circuit.bus_order()
+        n = len(bus_order)
+        J3 = np.zeros((n, n))
 
-        reactive_bus_order = [bus for bus in self.Circuit.bus_order() if bus not in ["Bus 1", "Bus 7"]]
-        angle_bus_order = [bus for bus in self.Circuit.bus_order() if bus not in ["Bus 1"]]
-
-        n = len(reactive_bus_order)  # 5 (Q2 to Q6)
-        m = len(angle_bus_order)  # 6 (δ2 to δ7)
-
-        J3 = np.zeros((n, m), dtype=float)
-
-        for k, bus_k in enumerate(reactive_bus_order):
-            for j, bus_j in enumerate(angle_bus_order):
+        for k, bus_k in enumerate(bus_order):
+            V_k = self.voltage[bus_k]
+            δ_k = self.delta[bus_k]
+            for j, bus_j in enumerate(bus_order):
+                V_j = self.voltage[bus_j]
+                δ_j = self.delta[bus_j]
                 Y_kj = self.Circuit.ybus.at[bus_k, bus_j]
                 θ_kj = np.angle(Y_kj)
-                V_k = self.voltage[bus_k]
-                V_j = self.voltage[bus_j]
 
                 if k == j:
                     J3[k, j] = V_k * sum(
-                        V_j * abs(Y_kj) * np.cos(self.delta[bus_k] - self.delta[bus_j] - θ_kj)
-                        for bus_j in self.Circuit.bus_order() if bus_j not in ["Bus 1", bus_k]
+                        self.voltage[bus_m] * abs(self.Circuit.ybus.at[bus_k, bus_m]) *
+                        np.cos(δ_k - self.delta[bus_m] - np.angle(self.Circuit.ybus.at[bus_k, bus_m]))
+                        for bus_m in bus_order
                     )
                 else:
-                    J3[k, j] = -V_k * V_j * abs(Y_kj) * np.cos(self.delta[bus_k] - self.delta[bus_j] - θ_kj)
-
+                    J3[k, j] = -V_k * V_j * abs(Y_kj) * np.cos(δ_k - δ_j - θ_kj)
         return J3
 
     def calculate_J4(self):
-        """Computes J4: Partial derivatives of reactive power with respect to voltage magnitudes."""
+        """Full J4: ∂Q/∂V for all buses including Slack and PV."""
+        bus_order = self.Circuit.bus_order()
+        n = len(bus_order)
+        J4 = np.zeros((n, n))
 
-        reactive_bus_order = [bus for bus in self.Circuit.bus_order() if bus not in ["Bus 1", "Bus 7"]]
-        voltage_order = [bus for bus in self.Circuit.bus_order() if bus not in ["Bus 1", "Bus 7"]]
-
-        n = len(reactive_bus_order)  # 5 (Q2 to Q6)
-        m = len(voltage_order)  # 5 (V2 to V6)
-
-        J4 = np.zeros((n, m), dtype=float)
-
-        for k, bus_k in enumerate(reactive_bus_order):
-            for j, bus_j in enumerate(voltage_order):
+        for k, bus_k in enumerate(bus_order):
+            V_k = self.voltage[bus_k]
+            δ_k = self.delta[bus_k]
+            for j, bus_j in enumerate(bus_order):
+                V_j = self.voltage[bus_j]
+                δ_j = self.delta[bus_j]
                 Y_kj = self.Circuit.ybus.at[bus_k, bus_j]
                 θ_kj = np.angle(Y_kj)
-                V_k = self.voltage[bus_k]
-                V_j = self.voltage[bus_j]
 
                 if k == j:
-                    J4[k, j] = -V_k * abs(Y_kj) * np.sin(θ_kj) + sum(
-                        V_j * abs(Y_kj) * np.sin(self.delta[bus_k] - self.delta[bus_j] - θ_kj)
-                        for bus_j in self.Circuit.bus_order() if bus_j not in ["Bus 1", bus_k]
-                    )
+                    J4[k, j] = -2 * V_k * abs(self.Circuit.ybus.at[bus_k, bus_k]) * np.sin(
+                        np.angle(self.Circuit.ybus.at[bus_k, bus_k]))
                 else:
-                    J4[k, j] = V_k * V_j * abs(Y_kj) * np.sin(self.delta[bus_k] - self.delta[bus_j] - θ_kj)
-
+                    J4[k, j] = V_k * abs(Y_kj) * np.sin(δ_k - δ_j - θ_kj)
         return J4
 
     def construct_jacobian(self, J1, J2, J3, J4):
-        """Constructs the full Jacobian matrix."""
-        J_top = np.hstack((J1, J2))
-        J_bottom = np.hstack((J3, J4))
-        return np.vstack((J_top, J_bottom))
+        top = np.hstack((J1, J2))
+        bottom = np.hstack((J3, J4))
+        J = np.vstack((top, bottom))
+        print(f"[DEBUG] Full Jacobian shape = {J.shape}")
+        return J
 
     def calculate_delta_x(self):
         if not hasattr(self, 'del_y'):
@@ -290,48 +277,26 @@ class PowerFlowSolver:
         delta_x = np.linalg.solve(J, self.del_y)
         return delta_x
 
-    # def update_angles_voltages(self):
-    #     delta_x = self.calculate_delta_x()
-    #
-    #     num_angles = len([bus for bus in self.Circuit.bus_order() if self.Circuit.bus_type[bus] != 'slack'])
-    #     delta_angles = delta_x[:num_angles]
-    #     delta_voltages = delta_x [num_angles:]
-    #
-    #     angle_index = 0
-    #     voltage_index = 0
-    #
-    #     for bus in self.Circuit.bus_order():
-    #         if self.Circuit.bus_type[bus] != 'slack':
-    #             self.delta[bus] += delta_angles[angle_index]
-    #             angle_index += 1
-    #         if self.Circuit.bus_type[bus] not in ['slack', 'PV']:
-    #             self.voltage[bus] += delta_voltages[voltage_index]
-    #             voltage_index += 1
-    #     print(self.delta)
-
     def update_angles_voltages(self):
         delta_x = self.calculate_delta_x()
 
-        num_angles = sum(1 for bus in self.Circuit.bus_order() if self.Circuit.bus_type[bus] != 'slack')
-        num_voltages = sum(1 for bus in self.Circuit.bus_order() if self.Circuit.bus_type[bus] not in ['slack', 'PV'])
-
-        delta_angles = delta_x[:num_angles]  # First num_angles elements
-        delta_voltages = delta_x[num_angles:num_angles + num_voltages]  # Remaining elements
-
-        # Debugging output
-        print(f"[DEBUG] delta_x.shape={delta_x.shape}, num_angles={num_angles}, num_voltages={num_voltages}")
-        print(f"[DEBUG] delta_angles.shape={delta_angles.shape}, delta_voltages.shape={delta_voltages.shape}")
+        num_angles = len([bus for bus in self.Circuit.bus_order() if self.Circuit.bus_type[bus] != 'Slack Bus'])
+        delta_angles = delta_x[:num_angles]
+        delta_voltages = delta_x [num_angles:]
 
         angle_index = 0
         voltage_index = 0
 
         for bus in self.Circuit.bus_order():
-            if self.Circuit.bus_type[bus] != 'slack':
+            if self.Circuit.bus_type[bus] != 'Slack Bus':
                 self.delta[bus] += delta_angles[angle_index]
                 angle_index += 1
-            if self.Circuit.bus_type[bus] not in ['slack', 'PV']:
+            if self.Circuit.bus_type[bus] not in ['Slack Bus', 'PV Bus']:
                 self.voltage[bus] += delta_voltages[voltage_index]
                 voltage_index += 1
+        print(self.delta)
+
+
 
 
 
