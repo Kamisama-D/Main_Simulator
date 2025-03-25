@@ -168,7 +168,7 @@ class PowerFlowSolver:
         return Qx
 
     def calculate_J1(self):
-        """Full J1: ∂P/∂δ for all buses including Slack and PV."""
+        """J1: ∂P/∂δ for all buses including Slack and PV."""
         bus_order = self.Circuit.bus_order()
         n = len(bus_order)
         J1 = np.zeros((n, n))
@@ -182,18 +182,26 @@ class PowerFlowSolver:
                 Y_kj = self.Circuit.ybus.at[bus_k, bus_j]
                 θ_kj = np.angle(Y_kj)
 
-                if k == j:
+                if k != j:
+                    # Off-diagonal: J1[k, j] = Vk * Vj * |Ykj| * sin(δk - δj - θkj)
+                    J1[k, j] = V_k * V_j * abs(Y_kj) * np.sin(δ_k - δ_j - θ_kj)
+                else:
+                    # Diagonal: J1[k, k] = -Vk * Σ_{n ≠ k} |Ykn| * Vn * sin(δk - δn - θkn)
                     J1[k, j] = -V_k * sum(
                         self.voltage[bus_m] * abs(self.Circuit.ybus.at[bus_k, bus_m]) *
                         np.sin(δ_k - self.delta[bus_m] - np.angle(self.Circuit.ybus.at[bus_k, bus_m]))
-                        for bus_m in bus_order
+                        for m, bus_m in enumerate(bus_order) if m != k
                     )
-                else:
-                    J1[k, j] = V_k * V_j * abs(Y_kj) * np.sin(δ_k - δ_j - θ_kj)
+
+        # Format as a DataFrame for display
+        J1_df = pd.DataFrame(J1, index=bus_order, columns=bus_order)
+        print("\n[DEBUG] J1 (∂P/∂δ):")
+        print(J1_df)
+
         return J1
 
     def calculate_J2(self):
-        """Full J2: ∂P/∂V for all buses including Slack and PV."""
+        """J2: ∂P/∂V for all buses including Slack and PV."""
         bus_order = self.Circuit.bus_order()
         n = len(bus_order)
         J2 = np.zeros((n, n))
@@ -202,24 +210,36 @@ class PowerFlowSolver:
             V_k = self.voltage[bus_k]
             δ_k = self.delta[bus_k]
             for j, bus_j in enumerate(bus_order):
-                V_j = self.voltage[bus_j]
                 δ_j = self.delta[bus_j]
                 Y_kj = self.Circuit.ybus.at[bus_k, bus_j]
                 θ_kj = np.angle(Y_kj)
 
-                if k == j:
-                    J2[k, j] = sum(
-                        abs(self.Circuit.ybus.at[bus_k, bus_m]) *
-                        np.cos(δ_k - self.delta[bus_m] - np.angle(self.Circuit.ybus.at[bus_k, bus_m])) *
-                        self.voltage[bus_m]
-                        for bus_m in bus_order
-                    )
-                else:
+                if k != j:
+                    # Off-diagonal: J2[k, j] = Vk * |Ykj| * cos(δk - δj - θkj)
                     J2[k, j] = V_k * abs(Y_kj) * np.cos(δ_k - δ_j - θ_kj)
+                else:
+                    # Diagonal: J2[k, k] = Vk * |Ykk| * cos(θkk) + Σ_{n} |Ykn| * Vn * cos(δk - δn - θkn)
+                    Y_kk = self.Circuit.ybus.at[bus_k, bus_k]
+                    θ_kk = np.angle(Y_kk)
+                    diag_term = V_k * abs(Y_kk) * np.cos(θ_kk)
+
+                    sum_term = sum(
+                        abs(self.Circuit.ybus.at[bus_k, bus_m]) * self.voltage[bus_m] *
+                        np.cos(δ_k - self.delta[bus_m] - np.angle(self.Circuit.ybus.at[bus_k, bus_m]))
+                        for m, bus_m in enumerate(bus_order)  # NOTE: include m == k
+                    )
+
+                    J2[k, j] = diag_term + sum_term
+
+        # Format as a DataFrame for display
+        J2_df = pd.DataFrame(J2, index=bus_order, columns=bus_order)
+        print("\n[DEBUG] J2 (∂P/∂V):")
+        print(J2_df)
+
         return J2
 
     def calculate_J3(self):
-        """Full J3: ∂Q/∂δ for all buses including Slack and PV."""
+        """J3: ∂Q/∂δ for all buses including Slack and PV."""
         bus_order = self.Circuit.bus_order()
         n = len(bus_order)
         J3 = np.zeros((n, n))
@@ -233,18 +253,27 @@ class PowerFlowSolver:
                 Y_kj = self.Circuit.ybus.at[bus_k, bus_j]
                 θ_kj = np.angle(Y_kj)
 
-                if k == j:
-                    J3[k, j] = V_k * sum(
-                        self.voltage[bus_m] * abs(self.Circuit.ybus.at[bus_k, bus_m]) *
-                        np.cos(δ_k - self.delta[bus_m] - np.angle(self.Circuit.ybus.at[bus_k, bus_m]))
-                        for bus_m in bus_order
-                    )
-                else:
+                if k != j:
+                    # Off-diagonal: J3[k, j] = -Vk * Vj * |Ykj| * cos(δk - δj - θkj)
                     J3[k, j] = -V_k * V_j * abs(Y_kj) * np.cos(δ_k - δ_j - θ_kj)
+                else:
+                    # Diagonal: J3[k, k] = Vk * Σ_{n ≠ k} |Ykn| * Vn * cos(δk - δn - θkn)
+                    sum_term = sum(
+                        abs(self.Circuit.ybus.at[bus_k, bus_m]) * self.voltage[bus_m] *
+                        np.cos(δ_k - self.delta[bus_m] - np.angle(self.Circuit.ybus.at[bus_k, bus_m]))
+                        for m, bus_m in enumerate(bus_order) if m != k
+                    )
+                    J3[k, j] = V_k * sum_term
+
+        # Format as a DataFrame for display
+        J3_df = pd.DataFrame(J3, index=bus_order, columns=bus_order)
+        print("\n[DEBUG] J3 (∂Q/∂δ):")
+        print(J3_df)
+
         return J3
 
     def calculate_J4(self):
-        """Full J4: ∂Q/∂V for all buses including Slack and PV."""
+        """J4: ∂Q/∂V for all buses including Slack and PV."""
         bus_order = self.Circuit.bus_order()
         n = len(bus_order)
         J4 = np.zeros((n, n))
@@ -258,18 +287,42 @@ class PowerFlowSolver:
                 Y_kj = self.Circuit.ybus.at[bus_k, bus_j]
                 θ_kj = np.angle(Y_kj)
 
-                if k == j:
-                    J4[k, j] = -2 * V_k * abs(self.Circuit.ybus.at[bus_k, bus_k]) * np.sin(
-                        np.angle(self.Circuit.ybus.at[bus_k, bus_k]))
-                else:
+                if k != j:
+                    # Off-diagonal: J4[k, j] = Vk * |Ykj| * sin(δk - δj - θkj)
                     J4[k, j] = V_k * abs(Y_kj) * np.sin(δ_k - δ_j - θ_kj)
+                else:
+                    # Diagonal: J4[k, k] = -Vk * |Ykk| * sin(θkk) + Σ_{n} |Ykn| * Vn * sin(δk - δn - θkn)
+                    Y_kk = self.Circuit.ybus.at[bus_k, bus_k]
+                    θ_kk = np.angle(Y_kk)
+                    diag_term = -V_k * abs(Y_kk) * np.sin(θ_kk)
+                    sum_term = sum(
+                        abs(self.Circuit.ybus.at[bus_k, bus_m]) * self.voltage[bus_m] *
+                        np.sin(δ_k - self.delta[bus_m] - np.angle(self.Circuit.ybus.at[bus_k, bus_m]))
+                        for m, bus_m in enumerate(bus_order)
+                    )
+                    J4[k, j] = diag_term + sum_term
+
+        # Format as a DataFrame for display
+        J4_df = pd.DataFrame(J4, index=bus_order, columns=bus_order)
+        print("\n[DEBUG] J4 (∂Q/∂V):")
+        print(J4_df)
+
         return J4
 
     def construct_jacobian(self, J1, J2, J3, J4):
+        """Constructs the full Jacobian matrix by stacking submatrices."""
         top = np.hstack((J1, J2))
         bottom = np.hstack((J3, J4))
         J = np.vstack((top, bottom))
-        print("\n[DEBUG] Full Jacobian Matrix:\n", J)
+
+        bus_order = self.Circuit.bus_order()
+        labels = [f"Bus {b}" for b in bus_order]
+        full_index = labels + labels
+        full_columns = bus_order + bus_order
+        J_df = pd.DataFrame(J, index=full_index, columns=full_columns)
+
+        print("\n[DEBUG] Full Jacobian Matrix:")
+        print(J_df)
         print(f"[DEBUG] Full Jacobian shape = {J.shape}")
         return J
 
