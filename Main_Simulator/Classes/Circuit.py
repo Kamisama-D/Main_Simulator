@@ -55,41 +55,23 @@ class Circuit:
 
 
     def add_generator(self, name: str, bus: str, per_unit: float, real_power: float):
-        gen = Generator(name, self.buses[bus], real_power, per_unit)
-        self.generators[name] = gen
+        if name in self.generators:
+            raise ValueError(f"Generator '{name}' already exists in the circuit.")
 
+        generator = Generator(name, self.buses[bus], real_power, per_unit)
+        self.generators[name] = generator
+
+        # Only update bus real power once
         self.buses[bus].real_power += real_power
-        if not hasattr(self.buses[bus], 'generators'):
-            self.buses[bus].generators = []
-        self.buses[bus].generators.append(gen)
 
-        # Correct bus type assignment
+        # Set bus type based on whether it's the first generator
         if not self.first_generator_added:
-            self.buses[bus].bus_type = 'Slack Bus'
+            self.buses[bus].bus_type = "Slack Bus"
             self.first_generator_added = True
-        elif self.buses[bus].bus_type != 'Slack Bus':
-            self.buses[bus].bus_type = 'PV Bus'
+        elif self.buses[bus].bus_type != "Slack Bus":
+            self.buses[bus].bus_type = "PV Bus"
 
         print(f"[DEBUG] Added generator '{name}' to {bus} → P = {real_power}")
-
-    def update_bus_data(self):
-        self.bus_type = {}
-        self.num_PV_buses = 0
-        self.num_PQ_buses = 0
-        self.real_power = {}
-        self.reactive_power = {}
-
-        for b in self.bus_order():
-            self.real_power[b] = self.buses[b].real_power
-            self.reactive_power[b] = self.buses[b].reactive_power
-            self.bus_type[b] = self.buses[b].bus_type
-
-            if self.buses[b].bus_type == "PQ Bus":
-                self.num_PQ_buses += 1
-            elif self.buses[b].bus_type == "PV Bus":
-                self.num_PV_buses += 1
-
-
 
     def update_bus_data(self):
         self.bus_type = {}
@@ -180,9 +162,20 @@ class Circuit:
 
         return real_power
 
+    # def reactive_power_vector(self):
+    #     """Computes the reactive power vector (Q) from all buses."""
+    #     return {bus.name: sum(load.reactive_power for load in bus.loads) for bus in self.buses.values()}
+
     def reactive_power_vector(self):
         """Computes the reactive power vector (Q) from all buses."""
-        return {bus.name: sum(load.reactive_power for load in bus.loads) for bus in self.buses.values()}
+        reactive_power = {}
+
+        for bus in self.buses.values():
+            Q_load = sum(load.reactive_power for load in getattr(bus, "loads", []))
+            reactive_power[bus.name] = -Q_load  # 🔥 NEGATIVE SIGN for PQ buses
+            print(f"[DEBUG] {bus.name}: Q_load = {Q_load}, total = {-Q_load}")
+
+        return reactive_power
 
     def show_network(self):
         """Displays the network configuration."""

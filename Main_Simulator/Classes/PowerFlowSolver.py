@@ -78,7 +78,7 @@ class PowerFlowSolver:
         y_reactive = []
 
         for bus in self.Circuit.bus_order():
-            if self.Circuit.bus_type[bus] != "Slack Bus":  # Exclude Slack bus (P1)
+            if self.Circuit.bus_type[bus] != "Slack Bus":
                 y_real.append(real_power_vector[self.Circuit.bus_order().index(bus)])
 
         for bus in self.Circuit.bus_order():
@@ -92,6 +92,8 @@ class PowerFlowSolver:
             print(f"y[{i}] = {val:.6f}")
         print(f"[DEBUG] y shape = {y.shape}\n")
         return y
+
+
 
     def calculate_yx(self, Px, Qx):
         """
@@ -267,6 +269,7 @@ class PowerFlowSolver:
         top = np.hstack((J1, J2))
         bottom = np.hstack((J3, J4))
         J = np.vstack((top, bottom))
+        print("\n[DEBUG] Full Jacobian Matrix:\n", J)
         print(f"[DEBUG] Full Jacobian shape = {J.shape}")
         return J
 
