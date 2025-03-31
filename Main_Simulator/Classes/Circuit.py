@@ -2,25 +2,34 @@ import numpy as np
 import pandas as pd
 from Classes.transformer import Transformer
 from Classes.transmission_line import TransmissionLine
+from Classes.generator import Generator
+from Classes.load import Load
+from Classes.system_setting import SystemSettings
 
 
 class Circuit:
     """Represents a power system circuit, storing all components and managing configuration."""
 
-    def __init__(self, name):
+    def __init__(self, name, system_settings: SystemSettings):
         """Initializes the circuit with a name and empty dictionaries for components."""
         self.name = name
+        self.settings = system_settings
         self.buses = {}  # Stores Bus objects
+        self.bus_type = {}  # Initialize the bus type dictionary
         self.transformers = {}  # Stores Transformer objects
         self.transmission_lines = {}  # Stores TransmissionLine objects
+        self.generators = {}  # Stores Generator objects
+        self.loads = {}  # Stores Load objects
+        self.first_generator_added = False
 
-        self.ybus = None
+        self.ybus: pd.DataFrame = None  # Explicitly hinting it's a DataFrame
 
     def add_bus(self, bus):
         """Adds a bus object to the circuit. Raises an error if the bus already exists."""
         if bus.name in self.buses:
             raise ValueError(f"Bus '{bus.name}' already exists in the circuit.")
         self.buses[bus.name] = bus
+        self.bus_type[bus.name] = bus.bus_type
 
     def add_transformer(self, transformer):
         """Adds a transformer object to the circuit. Raises an error if the transformer already exists."""
@@ -34,6 +43,57 @@ class Circuit:
             raise ValueError(f"Transmission Line '{transmission_line.name}' already exists in the circuit.")
         self.transmission_lines[transmission_line.name] = transmission_line
 
+
+    def add_load(self, name:str, bus:str, real_power: float, reactive_power:float):
+        self.loads[name] = Load(name, self.buses[bus], real_power, reactive_power)
+        self.buses[bus].real_power -= real_power
+        self.buses[bus].reactive_power -= reactive_power
+
+        if not hasattr(self.buses[bus], 'loads'):
+            self.buses[bus].loads = []
+        self.buses[bus].loads.append(self.loads[name])
+
+
+    def add_generator(self, name: str, bus: str, per_unit: float, real_power: float):
+        if name in self.generators:
+            raise ValueError(f"Generator '{name}' already exists in the circuit.")
+
+        generator = Generator(name, self.buses[bus], real_power, per_unit)
+        self.generators[name] = generator
+
+        # Only update bus real power once
+        self.buses[bus].real_power += real_power
+
+        # Set bus type based on whether it's the first generator
+        if not self.first_generator_added:
+            self.buses[bus].bus_type = "Slack Bus"
+            self.first_generator_added = True
+        elif self.buses[bus].bus_type != "Slack Bus":
+            self.buses[bus].bus_type = "PV Bus"
+
+        print(f"[DEBUG] Added generator '{name}' to {bus} → P = {real_power}")
+
+    def update_bus_data(self):
+        self.bus_type = {}
+        self.num_PV_buses = 0
+        self.num_PQ_buses = 0
+        self.real_power = {}
+        self.reactive_power = {}
+
+        for b in self.bus_order():
+            # Copy from Bus object into Circuit dictionaries
+            self.real_power[b] = self.buses[b].real_power
+            self.reactive_power[b] = self.buses[b].reactive_power
+            self.bus_type[b] = self.buses[b].bus_type
+
+            # Count buses by type
+            if self.buses[b].bus_type == "PQ Bus":
+                self.num_PQ_buses += 1
+            elif self.buses[b].bus_type == "PV Bus":
+                self.num_PV_buses += 1
+
+            print(f"[TRACE] During update: {b} classified as {self.buses[b].bus_type}")
+
     def calc_ybus(self):
         """Computes the system-wide Ybus admittance matrix in per-unit."""
         num_buses = len(self.buses)
@@ -44,6 +104,8 @@ class Circuit:
         # Accumulate contributions from all transformers
         for transformer in self.transformers.values():
             yprim_pu = transformer.yprim_pu  # Ensure using per-unit values
+            if not isinstance(yprim_pu, pd.DataFrame):
+                raise TypeError(f"{transformer.name} yprim_pu is not a DataFrame!")
             bus1, bus2 = transformer.bus1.name, transformer.bus2.name
             self.ybus.loc[bus1, bus1] += yprim_pu.loc[bus1, bus1]
             self.ybus.loc[bus2, bus2] += yprim_pu.loc[bus2, bus2]
@@ -53,6 +115,8 @@ class Circuit:
         # Accumulate contributions from all transmission lines
         for line in self.transmission_lines.values():
             yprim_pu = line.yprim_pu  # Ensure using per-unit values
+            if not isinstance(yprim_pu, pd.DataFrame):
+                raise TypeError(f"{line.name} yprim_pu is not a DataFrame!")
             bus1, bus2 = line.bus1.name, line.bus2.name
             self.ybus.loc[bus1, bus1] += yprim_pu.loc[bus1, bus1]
             self.ybus.loc[bus2, bus2] += yprim_pu.loc[bus2, bus2]
@@ -66,6 +130,53 @@ class Circuit:
 
         return self.ybus
 
+
+
+    def get_base_power(self):
+        """Returns the base power of the system."""
+        return self.settings.base_power
+
+    def get_frequency(self):
+        """Returns the system frequency."""
+        return self.settings.frequency
+
+    def bus_order(self):
+        """Returns the ordered list of bus names."""
+        return list(self.buses.keys())
+
+    def bus_types(self):
+        """Returns a dictionary mapping bus names to their types."""
+        return {bus.name: bus.bus_type for bus in self.buses.values()}
+
+    def real_power_vector(self):
+        real_power = {}
+
+        for bus in self.buses.values():
+            P_load = sum(load.real_power for load in getattr(bus, "loads", []))
+            P_gen = sum(gen.real_power for gen in getattr(bus, "generators", []))
+
+            total_P = P_gen - P_load
+            real_power[bus.name] = total_P
+
+            print(f"[DEBUG] {bus.name}: P_gen = {P_gen}, P_load = {P_load}, total = {total_P}")
+
+        return real_power
+
+    # def reactive_power_vector(self):
+    #     """Computes the reactive power vector (Q) from all buses."""
+    #     return {bus.name: sum(load.reactive_power for load in bus.loads) for bus in self.buses.values()}
+
+    def reactive_power_vector(self):
+        """Computes the reactive power vector (Q) from all buses."""
+        reactive_power = {}
+
+        for bus in self.buses.values():
+            Q_load = sum(load.reactive_power for load in getattr(bus, "loads", []))
+            reactive_power[bus.name] = -Q_load  # 🔥 NEGATIVE SIGN for PQ buses
+            print(f"[DEBUG] {bus.name}: Q_load = {Q_load}, total = {-Q_load}")
+
+        return reactive_power
+
     def show_network(self):
         """Displays the network configuration."""
         print(f"\nCircuit Name: {self.name}")
@@ -78,6 +189,14 @@ class Circuit:
         print("\n--- Transmission Lines ---")
         for line in self.transmission_lines.values():
             print(f"{line.name}: {line.bus1.name} ↔ {line.bus2.name}")
+        print("\n--- Generators ---")
+        for generator in self.generators.values():
+            print(f"{generator.name}: Connected to {generator.bus.name}, MW Setpoint: {generator.mw_setpoint} MW")
+        print("\n--- Loads ---")
+        for load in self.loads.values():
+            print(
+                f"{load.name}: Connected to {load.bus.name}, Real Power: {load.real_power} MW, Reactive Power: {load.reactive_power} Mvar")
+
 
     def show_ybus(self):
         """Displays the Ybus matrix if it has been calculated."""
