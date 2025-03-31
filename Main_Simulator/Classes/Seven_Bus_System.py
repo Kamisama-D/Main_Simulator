@@ -9,6 +9,7 @@ from Classes.system_setting import SystemSettings
 from Classes.PowerFlowSolver import PowerFlowSolver  # Import power flow solver
 from Classes.generator import Generator  # Import Generator
 from Classes.load import Load
+from Classes.Newton_Raphson import NewtonRaphson
 import pandas as pd
 pd.set_option('display.max_columns', None)
 pd.set_option('display.width', 1000)
@@ -92,10 +93,19 @@ print("\nVector y (Expected Power Injections):", power_flow_solver.initialize_y(
 print("\nVector yx (Calculated Power Injections):", power_flow_solver.calc_Px(), power_flow_solver.calc_Qx())
 print("\nMismatch Vector Δy:", power_flow_solver.del_y)
 
+# Newton-Raphson Solution
+newton_solver = NewtonRaphson(power_flow_solver)
+converged = newton_solver.solve(tol=0.001, max_iter=50)
+if converged:
+    print("\nNewton-Raphson converged successfully.")
+else:
+    print("\nNewton-Raphson did not converge.")
 
+# Display final state variables after convergence:
+print("\nFinal Voltage Magnitudes:")
+for bus in circuit.bus_order():
+    print(f"{bus}: {power_flow_solver.voltage[bus]:.4f}")
 
-
-
-
-
-
+print("\nFinal Voltage Angles (radians):")
+for bus in circuit.bus_order():
+    print(f"{bus}: {power_flow_solver.delta[bus]:.4f}")
