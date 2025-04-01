@@ -11,6 +11,7 @@ from Classes.generator import Generator  # Import Generator
 from Classes.load import Load
 from Classes.Newton_Raphson import NewtonRaphson
 import pandas as pd
+import numpy as np
 pd.set_option('display.max_columns', None)
 pd.set_option('display.width', 1000)
 
@@ -106,6 +107,6 @@ print("\nFinal Voltage Magnitudes:")
 for bus in circuit.bus_order():
     print(f"{bus}: {power_flow_solver.voltage[bus]:.4f}")
 
-print("\nFinal Voltage Angles (radians):")
+print("\nFinal Voltage Angles (degrees):")
 for bus in circuit.bus_order():
-    print(f"{bus}: {power_flow_solver.delta[bus]:.4f}")
+    print(f"{bus}: {np.degrees(power_flow_solver.delta[bus]):.4f}")
