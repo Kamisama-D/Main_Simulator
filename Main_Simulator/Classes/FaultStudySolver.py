@@ -48,7 +48,28 @@ class FaultStudySolver:
             E_k_complex = (1 - (Zbus[k, n] / Z_nn)) * V_F
             magnitude = np.abs(E_k_complex)
             angle_deg = np.degrees(np.angle(E_k_complex))
-            self.voltages[node] = (magnitude, angle_deg)
+            # Store raw voltages
+            raw_voltages = {}
+            for k, node in enumerate(bus_order):
+                E_k_complex = (1 - (Zbus[k, n] / Z_nn)) * V_F
+                magnitude = np.abs(E_k_complex)
+                angle_deg = np.degrees(np.angle(E_k_complex))
+                raw_voltages[node] = (magnitude, angle_deg)
+
+            # Dynamically find the slack bus
+            slack_bus = None
+            for name, bus in self.circuit.buses.items():
+                if bus.bus_type == "Slack Bus":
+                    slack_bus = name
+                    break
+
+            if slack_bus is None:
+                raise ValueError("No Slack Bus defined in the circuit.")
+
+            # Normalize all angles so that Slack Bus has angle 0°
+            ref_angle = raw_voltages[slack_bus][1]
+            for node, (mag, ang) in raw_voltages.items():
+                self.voltages[node] = (mag, ang - ref_angle)
 
         # updates: result should use voltage magnitude and degree
         return self.fault_current, self.voltages  # where fault_current = (magnitude, angle)

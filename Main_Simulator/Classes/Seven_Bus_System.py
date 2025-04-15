@@ -98,5 +98,5 @@ from MainSolver import Solver
 # solver.run()
 
 # Example for Fault Study at Bus 5
-solver = Solver(circuit, analysis_mode='fault', faulted_bus="Bus 1")
+solver = Solver(circuit, analysis_mode='fault', faulted_bus="Bus 4")
 solver.run()
