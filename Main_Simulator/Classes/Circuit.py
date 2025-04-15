@@ -54,11 +54,13 @@ class Circuit:
         self.buses[bus].loads.append(self.loads[name])
 
 
-    def add_generator(self, name: str, bus: str, per_unit: float, real_power: float):
+    def add_generator(self, name: str, bus: str, per_unit: float, real_power: float,
+                      x1=None, x2=None, x0=None):
         if name in self.generators:
             raise ValueError(f"Generator '{name}' already exists in the circuit.")
 
-        generator = Generator(name, self.buses[bus], real_power, per_unit)
+        generator = Generator(name, self.buses[bus], real_power, per_unit,
+                              x1=x1, x2=x2, x0=x0, system_settings=self.settings)
         self.generators[name] = generator
 
         # Only update bus real power once
@@ -130,7 +132,24 @@ class Circuit:
 
         return self.ybus
 
+    def calc_ybus_positive(self):
+        """Constructs the Ybus matrix for symmetrical fault analysis (positive-sequence only),
+        including generator subtransient admittances.
+        """
+        self.calc_ybus()  # Start with transformer + transmission line admittances
+        Ybus_aug = self.ybus.copy()
 
+        for gen in self.generators.values():
+            gen.calc_admittances()  # Ensure admittances are calculated
+
+            if gen.Y1 is not None:
+                bus_name = gen.bus.name
+                if bus_name not in Ybus_aug.index:
+                    raise ValueError(f"Bus {bus_name} not in Ybus index!")
+                Ybus_aug.loc[bus_name, bus_name] += gen.Y1
+                print(f"[DEBUG] Added Y1 of Generator '{gen.name}' to bus {bus_name}: {gen.Y1}")
+
+        return Ybus_aug
 
     def get_base_power(self):
         """Returns the base power of the system."""

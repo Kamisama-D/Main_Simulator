@@ -48,8 +48,8 @@ for load in [load3, load4, load5]:
     circuit.add_load(load.name, load.bus.name, load.real_power, load.reactive_power)
 
 # Define Generators
-circuit.add_generator("G1", "Bus 1", per_unit=1.0, real_power=0)     # Slack
-circuit.add_generator("G2", "Bus 7", per_unit=1.0, real_power=200)   # PV
+circuit.add_generator("G1", "Bus 1", per_unit=1.0, real_power=0, x1=0.12, x2=0.14, x0=0.05)     # Slack
+circuit.add_generator("G2", "Bus 7", per_unit=1.0, real_power=200, x1=0.12, x2=0.14, x0=0.05)   # PV
 
 
 # Define Transformers
@@ -85,28 +85,18 @@ for line in lines:
 circuit.calc_ybus()
 circuit.show_ybus()
 
-# Run Power Flow Solver
-power_flow_solver = PowerFlowSolver(1, circuit)
+# ➕ Show Ybus Positive-Sequence (for symmetrical fault analysis)
+ybus_positive = circuit.calc_ybus_positive()
+print("\n--- Ybus Positive-Sequence (for Fault Analysis) ---")
+print(ybus_positive)
 
-# Show key power flow vectors
-print("\nVector x (State Variables):", power_flow_solver.initialize_x())
-print("\nVector y (Expected Power Injections):", power_flow_solver.initialize_y())
-print("\nVector yx (Calculated Power Injections):", power_flow_solver.calc_Px(), power_flow_solver.calc_Qx())
-print("\nMismatch Vector Δy:", power_flow_solver.del_y)
+# Comment/uncomment depending on which analysis you want to run.
+from MainSolver import Solver
 
-# Newton-Raphson Solution
-newton_solver = NewtonRaphson(power_flow_solver)
-converged = newton_solver.solve(tol=0.001, max_iter=50)
-if converged:
-    print("\nNewton-Raphson converged successfully.")
-else:
-    print("\nNewton-Raphson did not converge.")
+# # Example for Power Flow Analysis
+# solver = Solver(circuit, analysis_mode='pf')
+# solver.run()
 
-# Display final state variables after convergence:
-print("\nFinal Voltage Magnitudes:")
-for bus in circuit.bus_order():
-    print(f"{bus}: {power_flow_solver.voltage[bus]:.4f}")
-
-print("\nFinal Voltage Angles (degrees):")
-for bus in circuit.bus_order():
-    print(f"{bus}: {np.degrees(power_flow_solver.delta[bus]):.4f}")
+# Example for Fault Study at Bus 5
+solver = Solver(circuit, analysis_mode='fault', faulted_bus="Bus 1")
+solver.run()
