@@ -1,12 +1,16 @@
 import numpy as np
 from Classes.Newton_Raphson import NewtonRaphson
 from FaultStudySolver import FaultStudySolver
+from pprint import pprint
+from numpy import angle, abs, degrees
 
 class Solver:
-    def __init__(self, circuit, analysis_mode='pf', faulted_bus=None):
+    def __init__(self, circuit, analysis_mode='pf', faulted_bus=None, fault_type='3ph', fault_impedance=0.0):
         self.circuit = circuit
         self.analysis_mode = analysis_mode.lower()
         self.faulted_bus = faulted_bus
+        self.fault_type = fault_type.lower()
+        self.fault_impedance = fault_impedance
 
     def run(self):
         # Calculate Ybus and Display It
@@ -41,21 +45,51 @@ class Solver:
         for bus in self.circuit.bus_order():
             print(f"{bus}: {np.degrees(power_flow_solver.delta[bus]):.4f}")
 
+
     def run_fault_study(self):
-        fault_solver = FaultStudySolver(self.circuit, self.faulted_bus)
-        fault_current, voltages = fault_solver.run()
+        fault_module = FaultStudySolver(self.circuit, self.faulted_bus, self.fault_type, self.fault_impedance)
+        fault_current, voltages = fault_module.run()
 
-        I_mag, I_ang = fault_current  # Already processed
-        print(f"\nFault Study Results:")
-        print(f"Fault current at {self.faulted_bus}: {I_mag:.4f} ∠ {I_ang:.2f}° p.u.")
+        I_mag, I_ang = fault_current
+        print(f"\n--- Fault Study Results ({self.fault_type.upper()} Fault at {self.faulted_bus}) ---")
+        print(f"Fault Current: {I_mag:.4f} ∠ {I_ang:.2f}° p.u.")
 
-        print("\nFinal Voltage Magnitudes:")
-        for node, (mag, _) in voltages.items():
-            print(f"{node}: {mag:.4f}")
+        # print("\n--- Bus Voltages (post-fault, per unit) ---")
+        # for bus, (mag, ang) in voltages.items():
+        #     print(f"{bus}: {mag:.4f} ∠ {ang:.2f}°")
 
-        print("\nFinal Voltage Angles (degrees):")
-        for node, (_, ang) in voltages.items():
-            print(f"{node}: {ang:.4f}")
+        if hasattr(fault_module, "phase_fault_current"):
+            print("\n--- Phase Fault Currents (Ia, Ib, Ic) ---")
+            for phase, (mag, ang) in fault_module.phase_fault_current.items():
+                print(f"    {phase} = {mag:.4f} ∠ {ang:.2f}°")
+
+        print("\n--- Phase Voltages (Va, Vb, Vc) ---")
+        for bus, ((Va_mag, Va_ang), (Vb_mag, Vb_ang), (Vc_mag, Vc_ang)) in fault_module.phase_voltages.items():
+            print(f"{bus}:")
+            print(f"    Va = {Va_mag:.4f} ∠ {Va_ang:.2f}°")
+            print(f"    Vb = {Vb_mag:.4f} ∠ {Vb_ang:.2f}°")
+            print(f"    Vc = {Vc_mag:.4f} ∠ {Vc_ang:.2f}°")
+
+        #
+        # if hasattr(fault_module, "seq_voltages"):
+        #     print("\n--- Sequence Voltages (V0, V1, V2) ---")
+        #     for bus, (V0, V1, V2) in fault_module.seq_voltages.items():
+        #         print(f"{bus}:")
+        #         print(f"    V0 = {abs(V0):.4f} ∠ {degrees(angle(V0)):.2f}°")
+        #         print(f"    V1 = {abs(V1):.4f} ∠ {degrees(angle(V1)):.2f}°")
+        #         print(f"    V2 = {abs(V2):.4f} ∠ {degrees(angle(V2)):.2f}°")
+
+
+
+        # if hasattr(fault_module, "seq_fault_current"):
+        #     I0, I1, I2 = fault_module.seq_fault_current
+        #     print("\n--- Sequence Fault Currents (I0, I1, I2) ---")
+        #     print(f"    I0 = {abs(I0):.4f} ∠ {degrees(angle(I0)):.2f}°")
+        #     print(f"    I1 = {abs(I1):.4f} ∠ {degrees(angle(I1)):.2f}°")
+        #     print(f"    I2 = {abs(I2):.4f} ∠ {degrees(angle(I2)):.2f}°")
+
+        return fault_current, voltages
+
 
 
 

@@ -8,7 +8,8 @@ import pandas as pd
 class TransmissionLine:
     """Represents a high-voltage transmission line between two buses."""
 
-    def __init__(self, name: str, bus1, bus2, bundle, geometry, length: float, s_base: float, frequency:float):
+    def __init__(self, name: str, bus1, bus2, bundle, geometry, length: float, s_base: float,
+                 frequency:float, connection_type="transposed", zero_seq_model="enabled"):
         """
         Initializes a TransmissionLine object.
 
@@ -50,11 +51,29 @@ class TransmissionLine:
         self.z_pu_sys = self.z_series / self.z_base_sys
         self.y_series = self.calc_yseries()  # Updated calculation for y_series
         self.y_pu_sys = 1 / self.z_pu_sys if self.z_pu_sys != 0 else complex(0, 0)
+        self.y1_pu = self.y_pu_sys
+        self.y2_pu = self.y_pu_sys
         self.b_shunt_pu = self.b_shunt / self.y_base_sys if self.y_base_sys != 0 else complex(0, 0)
 
         # Compute Y-primitive matrices
         self.yprim = self.calc_yprim()
         self.yprim_pu = self.calc_yprim_pu()
+
+        # Assign all sequence impedances
+        if connection_type == "transposed":
+            self.z0_pu = self.z_pu_sys  # Balanced case
+        elif connection_type == "untransposed":
+            r0 = self.r_series
+            x0 = self.x_series
+            self.z0 = 2.5 * complex(r0, x0)
+            self.z0_pu = self.z0 / self.z_base_sys
+
+        else:
+            raise ValueError(f"Unsupported connection type: {connection_type}")
+
+        self.y0_pu = 1 / self.z0_pu if zero_seq_model == "enabled" else 0
+        self.y1_pu = self.y_pu_sys
+        self.y2_pu = self.y_pu_sys
 
     def calc_base_values(self):
         """Calculates the base impedance and base admittance."""
@@ -101,6 +120,36 @@ class TransmissionLine:
         )
         return yprim_pu_matrix
 
+
+
+    def calc_yprim_sequence(self, sequence='positive'):
+        """
+        Returns the sequence-dependent Y-primitive matrix (per unit).
+        Supports: 'positive', 'negative', 'zero'
+        """
+        if sequence == 'positive':
+            Y = self.y1_pu
+        elif sequence == 'negative':
+            Y = self.y2_pu
+        elif sequence == 'zero':
+            Y = self.y0_pu
+            if Y == 0:
+                return pd.DataFrame(
+                    [[0.0, 0.0],
+                     [0.0, 0.0]],
+                    index=[self.bus1.name, self.bus2.name],
+                    columns=[self.bus1.name, self.bus2.name]
+                )
+        else:
+            raise ValueError(f"Invalid sequence '{sequence}'. Must be 'positive', 'negative', or 'zero'.")
+
+        # Return Yprim for all valid sequences
+        return pd.DataFrame([
+            [Y, -Y],
+            [-Y, Y]
+        ], index=[self.bus1.name, self.bus2.name],
+            columns=[self.bus1.name, self.bus2.name])
+
     def __repr__(self):
         """Returns a detailed string representation of the TransmissionLine object."""
         return (f"""
@@ -111,29 +160,37 @@ class TransmissionLine:
                     Geometry: {self.geometry}
                     Length: {self.length} mi
                     Frequency: {self.frequency} Hz
-
-                    --- Base Values ---
-                    s_base: {self.s_base} MVA
-                    v_base: {self.v_base} kV
-                    z_base_sys: {self.z_base_sys:.4f} Ω
                     
-                     --- Resistance and Reactance Values ---
-                    r_series: {abs(self.r_series):.4f} Ω
-                    r_series_pu: {abs(self.z_pu_sys.real):.4f} pu
-                    x_series: {abs(self.x_series):.4f} Ω
-                    x_series_pu: {abs(self.z_pu_sys.imag):.4f} pu
+                     """)
 
-                    --- Impedance and Admittance Values ---
-                    z_series: {abs(self.z_series):.4f} Ω
-                    z_pu_sys: {abs(self.z_pu_sys):.4f} pu
-                    y_series: {abs(self.y_series):.4f} S
-                    y_pu_sys: {abs(self.y_pu_sys):.4f} pu
-                    b_shunt: {abs(self.b_shunt):.4f} S
-                    b_shunt_pu: {abs(self.b_shunt_pu):.4f} pu
+                    # --- Base Values ---
+                    # s_base: {self.s_base} MVA
+                    # v_base: {self.v_base} kV
+                    # z_base_sys: {self.z_base_sys:.4f} Ω
+                    #
+                    # --- Impedance and Admittance Values ---
+                    # z_pu_sys: {abs(self.z_pu_sys):.4f} pu
+                    # y_pu_sys: {abs(self.y_pu_sys):.4f} pu
+                    # b_shunt_pu: {abs(self.b_shunt_pu):.4f} pu
+                    #
+                    # f"--- Y-Primitive Matrix (Yprim_pu) [Per Unit] ---\n{self.yprim_pu}\n"
+                    #
+                    # --- Sequence Impedance & Admittance Info ---
+                    # Connection Type: {self.connection_type.upper()}
+                    # f"Connection Type: {self.connection_type.upper()}"
+                    # Y1 (Positive Seq): {abs(self.y1_pu):.4f} pu
+                    # Y2 (Negative Seq): {abs(self.y2_pu):.4f} pu
+                    # Y0 (Zero Seq):     {abs(self.y0_pu):.4f} pu
+
+
+
+
+
+
+
                    
-                    f"--- Y-Primitive Matrix (Yprim) [Siemens] ---\n{self.yprim}\n\n"
-                    f"--- Y-Primitive Matrix (Yprim_pu) [Per Unit] ---\n{self.yprim_pu}\n"
-                """)
+
+
 
 
 
