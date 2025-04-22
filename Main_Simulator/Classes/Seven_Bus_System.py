@@ -113,14 +113,15 @@ print(ybus_zero)
 from MainSolver import Solver
 
 # # Example for Power Flow Analysis
+from GUI import launch_gui
+launch_gui(circuit)
+
 # solver = Solver(circuit, analysis_mode='pf')
 # solver.run()
 
 # Run Line-to-Ground (SLG) Fault at Bus 5  
-fault_solver = Solver(circuit, analysis_mode='fault', faulted_bus="Bus 5", fault_type="slg", fault_impedance=0.0)
-fault_solver.run()
-
-
+# fault_solver = Solver(circuit, analysis_mode='fault', faulted_bus="Bus 5", fault_type="slg", fault_impedance=0.0)
+# fault_solver.run()
 
 # # Example for 3 Phase (3ph) Fault at Bus 5
 # fault_solver = Solver(circuit, analysis_mode='fault', faulted_bus="Bus 5", fault_type="3ph")

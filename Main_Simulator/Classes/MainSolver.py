@@ -19,16 +19,20 @@ class Solver:
 
         if self.analysis_mode == 'pf':
             self.run_power_flow()
+            return
         elif self.analysis_mode == 'fault':
             if self.faulted_bus is None:
                 raise ValueError("For fault analysis, a faulted_bus must be specified.")
-            self.run_fault_study()
+            return self.run_fault_study()
         else:
             raise ValueError("Invalid analysis mode. Choose 'pf' or 'fault'.")
 
     def run_power_flow(self):
         from Classes.PowerFlowSolver import PowerFlowSolver
         power_flow_solver = PowerFlowSolver(1, self.circuit)
+
+        self.circuit.power_flow_solver = power_flow_solver
+
         newton_solver = NewtonRaphson(power_flow_solver)
         converged = newton_solver.solve(tol=0.001, max_iter=50)
 
@@ -44,6 +48,11 @@ class Solver:
         print("\nFinal Voltage Angles (degrees):")
         for bus in self.circuit.bus_order():
             print(f"{bus}: {np.degrees(power_flow_solver.delta[bus]):.4f}")
+
+        # viz = GraphVisualizer(self.circuit)
+        # viz.plot_bus_voltages(power_flow_solver.voltage, power_flow_solver.delta)
+        # viz.plot_line_flows(power_flow_solver)
+        # viz.draw_network_topology(show_voltage=True, voltage_dict=power_flow_solver.voltage)
 
 
     def run_fault_study(self):
@@ -70,24 +79,7 @@ class Solver:
             print(f"    Vb = {Vb_mag:.4f} ∠ {Vb_ang:.2f}°")
             print(f"    Vc = {Vc_mag:.4f} ∠ {Vc_ang:.2f}°")
 
-        #
-        # if hasattr(fault_module, "seq_voltages"):
-        #     print("\n--- Sequence Voltages (V0, V1, V2) ---")
-        #     for bus, (V0, V1, V2) in fault_module.seq_voltages.items():
-        #         print(f"{bus}:")
-        #         print(f"    V0 = {abs(V0):.4f} ∠ {degrees(angle(V0)):.2f}°")
-        #         print(f"    V1 = {abs(V1):.4f} ∠ {degrees(angle(V1)):.2f}°")
-        #         print(f"    V2 = {abs(V2):.4f} ∠ {degrees(angle(V2)):.2f}°")
-
-
-
-        # if hasattr(fault_module, "seq_fault_current"):
-        #     I0, I1, I2 = fault_module.seq_fault_current
-        #     print("\n--- Sequence Fault Currents (I0, I1, I2) ---")
-        #     print(f"    I0 = {abs(I0):.4f} ∠ {degrees(angle(I0)):.2f}°")
-        #     print(f"    I1 = {abs(I1):.4f} ∠ {degrees(angle(I1)):.2f}°")
-        #     print(f"    I2 = {abs(I2):.4f} ∠ {degrees(angle(I2)):.2f}°")
-
+        self.fault_module = fault_module
         return fault_current, voltages
 
 
