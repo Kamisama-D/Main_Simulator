@@ -32,17 +32,20 @@ class Circuit:
         self.bus_type[bus.name] = bus.bus_type
 
     def add_transformer(self, transformer):
-        """Adds a transformer object to the circuit. Raises an error if the transformer already exists."""
+        """Adds a transformer object to the circuit. Raises an error if the transformer already exists.
+           Also ensures the transformer computes its sequence Y-prim matrices."""
         if transformer.name in self.transformers:
             raise ValueError(f"Transformer '{transformer.name}' already exists in the circuit.")
+
         self.transformers[transformer.name] = transformer
 
     def add_transmission_line(self, transmission_line):
-        """Adds a transmission line object to the circuit. Raises an error if the line already exists."""
+        """Adds a transmission line object to the circuit. Raises an error if the line already exists.
+           Also ensures the transmission line computes its sequence Y-prim matrices."""
         if transmission_line.name in self.transmission_lines:
             raise ValueError(f"Transmission Line '{transmission_line.name}' already exists in the circuit.")
-        self.transmission_lines[transmission_line.name] = transmission_line
 
+        self.transmission_lines[transmission_line.name] = transmission_line
 
     def add_load(self, name:str, bus:str, real_power: float, reactive_power:float):
         self.loads[name] = Load(name, self.buses[bus], real_power, reactive_power)
@@ -54,11 +57,16 @@ class Circuit:
         self.buses[bus].loads.append(self.loads[name])
 
 
-    def add_generator(self, name: str, bus: str, per_unit: float, real_power: float):
+    def add_generator(self, name: str, bus: str, per_unit: float, real_power: float,
+                      x1=None, x2=None, x0=None, grounding_impedance_ohm=None, is_grounded=True, connection_type="wye"):
         if name in self.generators:
             raise ValueError(f"Generator '{name}' already exists in the circuit.")
 
-        generator = Generator(name, self.buses[bus], real_power, per_unit)
+        generator = Generator(name, self.buses[bus], real_power, per_unit,
+                              x1=x1, x2=x2, x0=x0, system_settings=self.settings,
+                              grounding_impedance_ohm=grounding_impedance_ohm,
+                              is_grounded=is_grounded, connection_type=connection_type
+                              )
         self.generators[name] = generator
 
         # Only update bus real power once
@@ -130,7 +138,105 @@ class Circuit:
 
         return self.ybus
 
+    def calc_ybus_positive(self):
+        """Constructs the Ybus matrix for symmetrical fault analysis (positive-sequence only),
+        including generator subtransient admittances.
+        """
+        bus_names = list(self.buses.keys())
+        Ybus_aug = pd.DataFrame(0j, index=bus_names, columns=bus_names)
 
+
+        for transformer in self.transformers.values():
+            yprim = transformer.calc_yprim_sequence("positive")
+            if yprim is not None:
+                for i in yprim.index:
+                    for j in yprim.columns:
+                        Ybus_aug.loc[i, j] += yprim.loc[i, j]
+
+
+        for line in self.transmission_lines.values():
+            yprim = line.calc_yprim_sequence("positive")
+            if yprim is not None:
+                for i in yprim.index:
+                    for j in yprim.columns:
+                        Ybus_aug.loc[i, j] += yprim.loc[i, j]
+
+
+        for gen in self.generators.values():
+            gen.calc_admittances()  # Ensure admittances are calculated
+
+            if gen.Y1 is not None:
+                bus_name = gen.bus.name
+                if bus_name not in Ybus_aug.index:
+                    raise ValueError(f"Bus {bus_name} not in Ybus index!")
+                Ybus_aug.loc[bus_name, bus_name] += gen.Y1
+
+
+        return Ybus_aug
+
+    def calc_ybus_negative(self):
+        """Constructs the negative-sequence Ybus matrix."""
+        bus_names = list(self.buses.keys())
+        Ybus_neg = pd.DataFrame(0j, index=bus_names, columns=bus_names)
+
+        # Add transformer negative-sequence Yprim
+        for transformer in self.transformers.values():
+            yprim = transformer.calc_yprim_sequence("negative")
+            for i in yprim.index:
+                for j in yprim.columns:
+                    Ybus_neg.loc[i, j] += yprim.loc[i, j]
+
+        # Add transmission line negative-sequence Yprim
+        for line in self.transmission_lines.values():
+            yprim = line.calc_yprim_sequence("negative")
+            for i in yprim.index:
+                for j in yprim.columns:
+                    Ybus_neg.loc[i, j] += yprim.loc[i, j]
+
+        # Add generator negative-sequence admittance (shunt)
+        for gen in self.generators.values():
+            gen.calc_admittances()
+            if gen.Y2 is not None:
+                Ybus_neg.loc[gen.bus.name, gen.bus.name] += gen.Y2
+                # print(f"[DEBUG] Added Y2 of Generator '{gen.name}' to bus {gen.bus.name}: {gen.Y2}")
+
+        return Ybus_neg
+
+    def calc_ybus_zero(self):
+        """
+        Constructs the zero-sequence Ybus matrix.
+        Only includes contributions from components that allow zero-sequence current flow.
+        """
+        bus_names = list(self.buses.keys())
+        Ybus_zero = pd.DataFrame(0j, index=bus_names, columns=bus_names)
+
+        # Add transformer zero-sequence Yprim
+        for transformer in self.transformers.values():
+            yprim = transformer.calc_yprim_sequence("zero")
+            if yprim is not None:
+                for i in yprim.index:
+                    for j in yprim.columns:
+                        Ybus_zero.loc[i, j] += yprim.loc[i, j]
+            # print(f"[DEBUG] Transformer {transformer.name} Yprim zero:\n{yprim}")
+
+        # Add transmission line zero-sequence Yprim
+        for line in self.transmission_lines.values():
+            yprim = line.calc_yprim_sequence("zero")
+            if yprim is not None:
+                for i in yprim.index:
+                    for j in yprim.columns:
+                        Ybus_zero.loc[i, j] += yprim.loc[i, j]
+            # print(f"[DEBUG] Line {line.name} Yprim zero:\n{yprim}")
+
+        # Add generator zero-sequence admittance
+        for gen in self.generators.values():
+            gen.calc_admittances()
+            if gen.Y0 is not None and gen.Yn is not None:
+                bus_name = gen.bus.name
+                Ybus_zero.loc[bus_name, bus_name] += gen.Y0
+            # print(f"[DEBUG] Added Y0 of Generator '{gen.name}' to bus {bus_name}: {gen.Y0}")
+
+        return Ybus_zero
 
     def get_base_power(self):
         """Returns the base power of the system."""
@@ -158,13 +264,8 @@ class Circuit:
             total_P = P_gen - P_load
             real_power[bus.name] = total_P
 
-            print(f"[DEBUG] {bus.name}: P_gen = {P_gen}, P_load = {P_load}, total = {total_P}")
-
         return real_power
 
-    # def reactive_power_vector(self):
-    #     """Computes the reactive power vector (Q) from all buses."""
-    #     return {bus.name: sum(load.reactive_power for load in bus.loads) for bus in self.buses.values()}
 
     def reactive_power_vector(self):
         """Computes the reactive power vector (Q) from all buses."""
@@ -202,9 +303,6 @@ class Circuit:
         """Displays the Ybus matrix if it has been calculated."""
         if self.ybus is None:
             print("Ybus has not been calculated. Run calc_ybus() first.")
-        else:
-            print("\n--- Ybus Admittance Matrix ---")
-            #print(self.ybus.map(lambda x: f"{x.real:.6f} {'+' if x.imag >= 0 else '-'} j{x.imag:.6f}"))
-            print(self.ybus)
+
 
 
