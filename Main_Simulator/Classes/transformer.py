@@ -204,10 +204,12 @@ class Transformer:
         Returns:
             complex: adjusted voltage
         """
-        assert self.V_base_ratio > 0, "Voltage base ratio must be positive"
-        ratio = self.V_base_ratio if direction == "primary_to_secondary" else 1 / self.V_base_ratio
+        # assert self.V_base_ratio > 0, "Voltage base ratio must be positive"
+        # ratio = self.V_base_ratio if direction == "primary_to_secondary" else 1 / self.V_base_ratio
+        # shift = self.phase_shift_deg if direction == "primary_to_secondary" else -self.phase_shift_deg
+        # return ratio * V_seq * np.exp(1j * np.radians(shift))
         shift = self.phase_shift_deg if direction == "primary_to_secondary" else -self.phase_shift_deg
-        return ratio * V_seq * np.exp(1j * np.radians(shift))
+        return V_seq * np.exp(1j * np.radians(shift))
 
     def __repr__(self):
         """Returns a string representation of the Transformer object with magnitudes only."""

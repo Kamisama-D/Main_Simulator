@@ -26,13 +26,9 @@ class FaultStudySolver:
             raise ValueError(f"Unsupported fault type: {self.fault_type}")
 
     def run_3ph_fault(self):
-
         '''
-
         system base in the setting: Q of Generator1 = 100 Mvar, Q of Generator2 is 200 Mvar
-
         pu S = sqrt(Q**2 + P**2)
-
         '''
 
         # For fault study, we use the augmented positive-sequence Ybus.
@@ -51,7 +47,7 @@ class FaultStudySolver:
 
         # Calculate fault current (V_F is 1.0 p.u. pre-fault voltage)
         V_F = 1.0
-        Z_nn = Zbus[n, n]
+        Z_nn = Zbus[n, n] + self.fault_impedance # add fault impedance in series with the bus driving point
         I_complex = V_F / Z_nn
         I_mag = np.abs(I_complex)
         I_ang = np.degrees(np.angle(I_complex))
@@ -100,10 +96,13 @@ class FaultStudySolver:
 
         Vf = 1.0
         Z_eq = Z1[n, n] + Z2[n, n] + Z0[n, n] + 3 * self.fault_impedance
+        # total 3‑sequence current
         If = 3 * Vf / Z_eq
+        # each sequence current is one third of that
+        Iseq = Vf / Z_eq
 
         # Sequence fault currents (at faulted bus only)
-        I0 = I1 = I2 = If / 3
+        I0 = I1 = I2 = Iseq
         self.seq_fault_current = (I0, I1, I2)
 
         # Store fault current in polar form
@@ -114,18 +113,18 @@ class FaultStudySolver:
         slack_idx = bus_order.index(slack_bus)
         V1_slack = 1 + 0j  # Prefault positive-sequence voltage at slack
 
-        V1 = np.array([V1_slack - Z1[k, n] * If for k in range(len(bus_order))])
-        V2 = np.array([-Z2[k, n] * If for k in range(len(bus_order))])
-        V0 = np.array([-Z0[k, n] * If for k in range(len(bus_order))])
+        V1 = np.array([V1_slack - Z1[k, n] * I1 for k in range(len(bus_order))])
+        V2 = np.array([-Z2[k, n] * I2 for k in range(len(bus_order))])
+        V0 = np.array([-Z0[k, n] * I0 for k in range(len(bus_order))])
 
         self.seq_voltages = {
             bus_order[k]: (V0[k], V1[k], V2[k]) for k in range(len(bus_order))
         }
 
         # Enforce boundary condition: V0 + V1 + V2 = 0 at the faulted bus
-        V1[n] = 1 - Z1[n, n] * If
-        V2[n] = -Z2[n, n] * If
-        V0[n] = -Z0[n, n] * If
+        V1[n] = V1_slack - Z1[n, n] * I1
+        V2[n] = - Z2[n, n] * I2
+        V0[n] = - (V1[n] + V2[n])
 
         self.seq_voltages = {
             bus_order[k]: (V0[k], V1[k], V2[k])
@@ -169,7 +168,7 @@ class FaultStudySolver:
         V_abc = A @ V_012
 
         # Enforce V_a = 0 at the faulted bus for bolted SLG
-        V_abc[0, n] = 0.0
+        # V_abc[0, n] = 0.0
 
         self.phase_voltages = {
             bus_order[k]: (
@@ -206,96 +205,177 @@ class FaultStudySolver:
 
         return self.fault_current, self.voltages
 
-    # def run_ll_fault(self):
-    #     Y1 = self.circuit.calc_ybus_positive()
-    #     Y2 = self.circuit.calc_ybus_negative()
-    #     Z1, Z2 = np.linalg.inv(Y1.values), np.linalg.inv(Y2.values)
-    #     bus_order = list(Y1.index)
-    #     n = bus_order.index(self.faulted_bus)
-    #
-    #     Vf = 1.0
-    #     Z_eq = Z1[n, n] + Z2[n, n] + self.fault_impedance
-    #     If = np.sqrt(3) * Vf / Z_eq
-    #
-    #     I_mag = np.abs(If)
-    #     I_ang = np.degrees(np.angle(If))
-    #     if I_ang > 180:
-    #         I_ang -= 360
-    #     self.fault_current = (I_mag, I_ang)
-    #
-    #     V1 = np.array([1 - Z1[k, n] * If for k in range(len(bus_order))])
-    #     V2 = -Z2[:, n] * If
-    #     V0 = np.zeros(len(bus_order), dtype=complex)
-    #     Va = V0 + V1 + V2
-    #
-    #     raw_voltages = {
-    #         bus_order[k]: (np.abs(Va[k]), np.degrees(np.angle(Va[k])))
-    #         for k in range(len(bus_order))
-    #     }
-    #
-    #     slack_bus = next(name for name, bus in self.circuit.buses.items() if bus.bus_type == "Slack Bus")
-    #     ref_angle = raw_voltages[slack_bus][1]
-    #     self.voltages = {bus: (mag, ang - ref_angle) for bus, (mag, ang) in raw_voltages.items()}
-    #
-    #     # --- Symmetrical to Phase Voltages ---
-    #     a = np.exp(1j * 2 * np.pi / 3)
-    #     A = np.array([[1, 1, 1],
-    #                   [1, a ** 2, a],
-    #                   [1, a, a ** 2]])
-    #     V_012 = np.vstack([V0, V1, V2])
-    #     V_abc = A @ V_012
-    #     self.phase_voltages = {
-    #         bus_order[k]: (np.abs(V_abc[0, k]), np.abs(V_abc[1, k]), np.abs(V_abc[2, k]))
-    #         for k in range(len(bus_order))
-    #     }
-    #
-    #     return self.fault_current, self.voltages
-    #
-    # def run_dlg_fault(self):
-    #     Y1 = self.circuit.calc_ybus_positive()
-    #     Y2 = self.circuit.calc_ybus_negative()
-    #     Y0 = self.circuit.calc_ybus_zero()
-    #     Z1, Z2, Z0 = np.linalg.inv(Y1.values), np.linalg.inv(Y2.values), np.linalg.inv(Y0.values)
-    #     bus_order = list(Y1.index)
-    #     n = bus_order.index(self.faulted_bus)
-    #
-    #     Vf = 1.0
-    #     Z_eq = Z1[n, n] + Z2[n, n] + Z0[n, n] + (3 * self.fault_impedance)
-    #     If = 3 * Vf / Z_eq
-    #
-    #     I_mag = np.abs(If)
-    #     I_ang = np.degrees(np.angle(If))
-    #     if I_ang > 180:
-    #         I_ang -= 360
-    #     self.fault_current = (I_mag, I_ang)
-    #
-    #     V1 = np.array([1 - Z1[k, n] * If for k in range(len(bus_order))])
-    #     V2 = -Z2[:, n] * If
-    #     V0 = -Z0[:, n] * If
-    #     Va = V0 + V1 + V2
-    #
-    #     raw_voltages = {
-    #         bus_order[k]: (np.abs(Va[k]), np.degrees(np.angle(Va[k])))
-    #         for k in range(len(bus_order))
-    #     }
-    #
-    #     slack_bus = next(name for name, bus in self.circuit.buses.items() if bus.bus_type == "Slack Bus")
-    #     ref_angle = raw_voltages[slack_bus][1]
-    #     self.voltages = {bus: (mag, ang - ref_angle) for bus, (mag, ang) in raw_voltages.items()}
-    #
-    #     # --- Symmetrical to Phase Voltages ---
-    #     a = np.exp(1j * 2 * np.pi / 3)
-    #     A = np.array([[1, 1, 1],
-    #                   [1, a ** 2, a],
-    #                   [1, a, a ** 2]])
-    #     V_012 = np.vstack([V0, V1, V2])
-    #     V_abc = A @ V_012
-    #     self.phase_voltages = {
-    #         bus_order[k]: (np.abs(V_abc[0, k]), np.abs(V_abc[1, k]), np.abs(V_abc[2, k]))
-    #         for k in range(len(bus_order))
-    #     }
-    #
-    #     return self.fault_current, self.voltages
+    def run_ll_fault(self):
+        """Line-to-Line (LL) fault"""
+        # Build sequence Ybus and invert to get Zbus for pos & neg
+        Y1 = self.circuit.calc_ybus_positive()
+        Y2 = self.circuit.calc_ybus_negative()
+        Z1 = np.linalg.inv(Y1.values)
+        Z2 = np.linalg.inv(Y2.values)
+
+        # Find faulted‐bus index
+        bus_order = list(Y1.index)
+        n = bus_order.index(self.faulted_bus)
+
+        # Pre-fault voltage
+        Vf = 1.0
+
+        # Equivalent driving‐point impedance: positive + negative sequence in series, plus fault‑impedance
+        Z_eq = Z1[n, n] + Z2[n, n] + self.fault_impedance
+
+        # Sequence currents: I1 = Vf/Z_eq, I2 = –I1, I0 = 0
+        I1 = Vf / Z_eq
+        I2 = -I1
+        I0 = 0 + 0j
+
+        # Store sequence fault currents
+        self.seq_fault_current = (I0, I1, I2)
+
+        # Also store total phase‐fault current (magnitude & angle) for reporting
+        I_mag = np.abs(I1)
+        I_ang = np.degrees(np.angle(I1))
+        if I_ang > 180:
+            I_ang -= 360
+        self.fault_current = (I_mag, I_ang)
+
+        # Compute sequence voltages at every bus
+        V1 = np.array([1 - Z1[k, n] * I1 for k in range(len(bus_order))], dtype=complex)
+        V2 = np.array([-Z2[k, n] * I2 for k in range(len(bus_order))], dtype=complex)
+        V0 = np.zeros(len(bus_order), dtype=complex)
+
+        V2[n] = 0 + 0j
+        V0[n] = 0 + 0j
+        V1[n] = Vf - Z1[n, n] * I1
+
+        self.seq_voltages = {
+            bus_order[k]: (V0[k], V1[k], V2[k])
+            for k in range(len(bus_order))
+        }
+
+        # Transform to phase voltages & phase currents
+        a = np.exp(1j * 2 * np.pi / 3)
+        A = np.array([[1, 1, 1],
+                      [1, a ** 2, a],
+                      [1, a, a ** 2]], dtype=complex)
+
+        V012 = np.vstack([V0, V1, V2])  # shape (3, N)
+        Vabc = A @ V012  # shape (3, N)
+        I012 = np.array([I0, I1, I2])  # shape (3,)
+        Iabc = A @ I012  # shape (3,)
+
+        self.phase_voltages = {
+            bus_order[k]: (
+                (abs(Vabc[0, k]), np.degrees(np.angle(Vabc[0, k]))),
+                (abs(Vabc[1, k]), np.degrees(np.angle(Vabc[1, k]))),
+                (abs(Vabc[2, k]), np.degrees(np.angle(Vabc[2, k]))),
+            )
+            for k in range(len(bus_order))
+        }
+
+        self.phase_fault_current = {
+            'Ia': (abs(Iabc[0]), np.degrees(np.angle(Iabc[0]))),
+            'Ib': (abs(Iabc[1]), np.degrees(np.angle(Iabc[1]))),
+            'Ic': (abs(Iabc[2]), np.degrees(np.angle(Iabc[2]))),
+        }
+
+        Ib_cplx = Iabc[1]
+        mag_B = np.abs(Ib_cplx)
+        ang_B = np.degrees(np.angle(Ib_cplx))
+        if ang_B > 180:
+            ang_B -= 360
+        self.fault_current = (mag_B, ang_B)
+
+        # Normalize phase‐voltages so slack bus angle = 0°
+        slack_bus = next(name for name, b in self.circuit.buses.items() if b.bus_type == "Slack Bus")
+        ref_ang = self.phase_voltages[slack_bus][0][1]  # Va angle at slack
+        self.voltages = {
+            bus: (Va_mag, Va_ang - ref_ang)
+            for bus, ((Va_mag, Va_ang), _, _) in self.phase_voltages.items()
+        }
+
+        return self.fault_current, self.voltages
+
+    def run_dlg_fault(self):
+        """Double Line-to-Ground fault"""
+        # Build sequence Ybus and invert to get Zbus for pos/neg/zero
+        Y1 = self.circuit.calc_ybus_positive()
+        Y2 = self.circuit.calc_ybus_negative()
+        Y0 = self.circuit.calc_ybus_zero()
+        Z1 = np.linalg.inv(Y1.values)
+        Z2 = np.linalg.inv(Y2.values)
+        Z0 = np.linalg.inv(Y0.values)
+
+        # Find faulted‐bus index
+        bus_order = list(Y1.index)
+        n = bus_order.index(self.faulted_bus)
+
+        # Pre-fault voltage
+        Vf = 1.0
+
+        # Equivalent driving‐point impedance: all three seq nets in series, plus 3·Zf for the ground connection
+        Z_eq = Z1[n, n] + Z2[n, n] + Z0[n, n] + 3 * self.fault_impedance
+
+        # All three sequence currents equal I_f = 3·Vf / Z_eq
+        I_f = 3 * Vf / Z_eq
+        I0 = I1 = I2 = I_f
+
+        # Store sequence fault currents
+        self.seq_fault_current = (I0, I1, I2)
+
+        # Also store total phase‐fault current (magnitude & angle) for reporting
+        I_mag = np.abs(I_f)
+        I_ang = np.degrees(np.angle(I_f))
+        if I_ang > 180:
+            I_ang -= 360
+        self.fault_current = (I_mag, I_ang)
+
+        # Compute sequence voltages at every bus
+        N = len(bus_order)
+        V1 = np.array([1.0 - Z1[k, n] * I1 for k in range(N)])
+        V2 = np.array([-Z2[k, n] * I2 for k in range(N)])
+        V0 = np.array([-Z0[k, n] * I0 for k in range(N)])
+
+        self.seq_voltages = {
+            bus_order[k]: (V0[k], V1[k], V2[k])
+            for k in range(N)
+        }
+
+        # Transform to phase quantities
+        a = np.exp(1j * 2 * np.pi / 3)
+        A = np.array([[1, 1, 1],
+                      [1, a ** 2, a],
+                      [1, a, a ** 2]])
+
+        V012 = np.vstack([V0, V1, V2])
+        Vabc = A @ V012
+        self.phase_voltages = {
+            bus_order[k]: (
+                (abs(Vabc[0, k]), np.degrees(np.angle(Vabc[0, k]))),
+                (abs(Vabc[1, k]), np.degrees(np.angle(Vabc[1, k]))),
+                (abs(Vabc[2, k]), np.degrees(np.angle(Vabc[2, k]))),
+            )
+            for k in range(N)
+        }
+
+        I012 = np.array([I0, I1, I2])
+        Iabc = A @ I012
+        self.phase_fault_current = {
+            'Ia': (abs(Iabc[0]), np.degrees(np.angle(Iabc[0]))),
+            'Ib': (abs(Iabc[1]), np.degrees(np.angle(Iabc[1]))),
+            'Ic': (abs(Iabc[2]), np.degrees(np.angle(Iabc[2]))),
+        }
+
+        # Normalize phase‐voltages to slack reference
+        slack = next(b for b, obj in self.circuit.buses.items() if obj.bus_type == "Slack Bus")
+        ref_ang = self.phase_voltages[slack][0][1]
+        self.voltages = {
+            bus: (mag, ang - ref_ang)
+            for bus, (Va, Vb, Vc) in self.phase_voltages.items()
+            for mag, ang in [Va]
+        }
+
+        return self.fault_current, self.voltages
+
 
     def __repr__(self):
         return f"FaultStudySolver(faulted_bus='{self.faulted_bus}', fault_type='{self.fault_type}')"

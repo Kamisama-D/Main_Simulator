@@ -116,21 +116,21 @@ from MainSolver import Solver
 # solver = Solver(circuit, analysis_mode='pf')
 # solver.run()
 
-# Run SLG Fault at Bus 5
+# Run Line-to-Ground (SLG) Fault at Bus 5  
 fault_solver = Solver(circuit, analysis_mode='fault', faulted_bus="Bus 5", fault_type="slg", fault_impedance=0.0)
 fault_solver.run()
 
 
 
-# # Example for SLG Fault at Bus 5
+# # Example for 3 Phase (3ph) Fault at Bus 5
 # fault_solver = Solver(circuit, analysis_mode='fault', faulted_bus="Bus 5", fault_type="3ph")
-#fault_solver.run()
+# fault_solver.run()
 
-# # Or for LL Fault at Bus 3
-# fault_solver = Solver(circuit, analysis_mode='fault', faulted_bus="Bus 3", fault_type="slg")
+# Or for Line-to-Line (LL) Fault at Bus 3
+# fault_solver = Solver(circuit, analysis_mode='fault', faulted_bus="Bus 3", fault_type="ll")
 # fault_solver.run()
 #
-# # Or for DLG Fault at Bus 6
-# fault_solver = Solver(circuit, analysis_mode='fault', faulted_bus="Bus 6", fault_type="dlg")
+# # Or for Double-Line-to-Ground (DLG) Fault at Bus 6
+# fault_solver = Solver(circuit, analysis_mode='fault', faulted_bus="Bus 5", fault_type="dlg")
 # fault_solver.run()
 
