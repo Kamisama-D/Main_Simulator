@@ -278,6 +278,20 @@ class Circuit:
 
         return reactive_power
 
+    def get_bus_generation(self, bus_name):
+        total_gen = 0.0
+        for gen in self.generators.values():  # ✅ use .values()
+            if gen.bus.name == bus_name:
+                total_gen += gen.real_power
+        return total_gen
+
+    def get_bus_load(self, bus_name):
+        total_load = 0.0
+        for load in self.loads.values():  # ✅ use .values()
+            if load.bus.name == bus_name:
+                total_load += load.real_power
+        return total_load
+
     def show_network(self):
         """Displays the network configuration."""
         print(f"\nCircuit Name: {self.name}")
