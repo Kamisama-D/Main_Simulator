@@ -55,7 +55,7 @@ It supports detailed power flow studies and fault simulations using per-unit mod
 
 ## Documentation
 
-The complete technical manual is available in the repository under **Documentation.pdf**. This document includes:
+The complete technical manual is available in the repository under [**Documentation.pdf**](https://github.com/Kamisama-D/Main_Simulator/blob/main/Project2_TechnicalManual_ara_jenny.pdf). This document includes:
 
 - **Theoretical background**
 - **Project architecture**
