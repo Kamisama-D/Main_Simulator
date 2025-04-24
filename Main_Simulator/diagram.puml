@@ -1,11 +1,203 @@
 @startuml
-'https://plantuml.com/sequence-diagram
+class Bus {
+    + name: str
+    + base_kv: float
+    + index: int
+    + real_power: float
+    + reactive_power: float
+    + bus_type: str
+    + loads: list
+}
+class Transformer {
+    + name: str
+    + bus1: Bus
+    + bus2: Bus
+    + power_rating: float
+    + impedance_percent: float
+    + x_over_r_ratio: float
+    + s_base: float
+    + primary_connection_type: str
+    + secondary_connection_type: str
+    + grounding_impedance_ohm_bus1: float
+    + grounding_impedance_ohm_bus2: float
+    + is_grounded_bus1: bool
+    + is_grounded_bus2: bool
+    + calc_base_impedance_xfmr()
+    + calc_base_impedance_sys()
+    + calc_pu_impedance_xfmr()
+    + calc_impedance()
+    + calc_pu_impedance_sys()
+    + calc_admittance()
+    + calc_pu_admittance_sys()
+    + calc_yprim()
+    + calc_yprim_pu()
+    + calc_yprim_sequence()
+    + adjust_sequence_voltage()
+}
+class Transmission_Line {
+    + name: str
+    + bus1: Bus
+    + bus2: Bus
+    + bundle: Bundle
+    + geometry: Geometry
+    + length: float
+    s_base: float
+    + frequency: float
+    + connection_type: str
+    + zero_seq_model: str
+    + calc_base_values()
+    + calc_resistance()
+    + calc_reactance()
+    + calc_bshunt()
+    + calc_yseries()
+    + calc_yprim()
+    + calc_yprim_pu()
+    + calc_yprim_sequence()
+}
+class Bundle {
+    + name: str
+    + num_conductors: int
+    + spacing: float
+    + conductor: Conductor
+    + calc_DSL()
+    + calc_DSC()
+}
+class Conductor {
+    + name: str
+    + diam: float
+    + GMR: float
+    + resistance: float
+    + ampacity: float
+    + calc_radius()
+}
+class Geometry {
+    + name: str
+    + xa: float
+    + ya: float
+    + xb: float
+    + yb: float
+    + xc: float
+    + yc: float
+    + Deq: float
+    + calc_Deq()
+}
+class Load {
+    + name: str
+    + bus: Bus
+    + real_power: float
+    + reactive_power: float
+}
+class Generator {
+    + name: str
+    + bus: Bus
+    + real_power: float
+    + per_unit: float
+    + x1: float
+    + x2: float
+    + x3: float
+    + system_setting: System_Setting
+    + grounding_impedance_ohm: float
+    + is_grounded: bool
+    + connection_type: str
+    + calc_admittances()
+    + calc_yprim_sequence(sequence: str)
+}
+class System_Setting {
+    + frequency: float
+    + base_power: float
+}
+class Circuit {
+    + name: str
+    + system_setting: SystemSetting
+    + add_bus()
+    + add_transformer()
+    + add_transmission_line()
+    + add_load()
+    + add_generator()
+    + update_bus_data()
+    + calc_ybus()
+    + calc_ybus_positive()
+    + calc_ybus_negative()
+    + calc_ybus_zero()
+    + get_base_power()
+    + get_frequency()
+    + bus_order()
+    + real_power_vector()
+    + reactive_power_vector()
+    + show_network()
+    + show_ybus()
+}
+class Main_Solver {
+    + circuit: Circuit
+    + analysis_mode: str
+    + faulted_bus: str
+    + fault_type: str
+    + fault_impedance: float
+    + run()
+    + run_power_flow()
+    + run_fault_study()
+}
+class Power_Flow_Solver {
+    + solver: Main_Solver
+    + circuit: Circuit
+    + flat_start()
+    + initialize_x()
+    + initialize_y()
+    + calculate_yx()
+    + calculate_power_mismatch()
+    + calculate_trimmed_power_mismatch()
+    + calc_Px()
+    + calc_Qx()
+    + calculate_delta_x()
+    + update_angles_voltages()
+}
+class Jacobians {
+    + circuit: Circuit
+    + delta: float
+    + voltage: float
+    + calculate_J1()
+    + calculate_J2()
+    + calculate_J3()
+    + calculate_J4()
+    + construct_jacobian()
+    + get_full_jacobian()
+    + get_trimmed_jacobian()
+}
+class Fault_Study_Solver {
+    + circuit:Circuit
+    + faulted_bus:str
+    + fault_type:str
+    + fault_impedance:float
+    + run()
+    + run_3ph_fault()
+    + run_slg_fault()
+    + run_ll_fault()
+    + run_dlg_fault()
+}
+class Seven_Bus_System {
+    + Power_Flow_Mode: Power_Flow_Solver
+    + Fault_Study_Mode: Fault_Study_Solver
+}
 
-autonumber
-
-Alice -> Bob: Authentication Request
-Bob --> Alice: Authentication Response
-
-Alice -> Bob: Another authentication Request
-Alice <-- Bob: another authentication Response
+Transformer "1" *-- "2" Bus: contains
+Transmission_Line "1" *-- "2" Bus: contains
+Transmission_Line "1" o-- "1" Bundle: contains
+Transmission_Line "1" o-- "1" Geometry: contains
+Bundle "1" *-- "many" Conductor: contains
+Bus "1" *-- "many" Load: contains
+Generator "1" o-- "1" Bus: contains
+Generator "1" o-- "1" System_Setting: contains
+Circuit "1" o-- "1" System_Setting: contains
+Circuit "1" *-- "many" Bus: contains
+Circuit "1" *-- "many" Transformer: contains
+Circuit "1" *-- "many" Transmission_Line: contains
+Circuit "1" *-- "many" Load: contains
+Circuit "1" *-- "many" Generator: contains
+Main_Solver "1" o-- "1" Circuit: contains
+Power_Flow_Solver "1" o-- "1" Main_Solver: contains
+Power_Flow_Solver "1" o-- "1" Jacobians: contains
+Jacobians "1" o-- "1" Circuit: contains
+Fault_Study_Solver "1" o-- "1" Main_Solver: contains
+Seven_Bus_System "1" o-- "1" Power_Flow_Solver: contains
+Seven_Bus_System "1" o-- "1" Fault_Study_Solver: contains
 @enduml

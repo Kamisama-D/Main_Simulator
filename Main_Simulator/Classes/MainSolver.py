@@ -49,12 +49,6 @@ class Solver:
         for bus in self.circuit.bus_order():
             print(f"{bus}: {np.degrees(power_flow_solver.delta[bus]):.4f}")
 
-        # viz = GraphVisualizer(self.circuit)
-        # viz.plot_bus_voltages(power_flow_solver.voltage, power_flow_solver.delta)
-        # viz.plot_line_flows(power_flow_solver)
-        # viz.draw_network_topology(show_voltage=True, voltage_dict=power_flow_solver.voltage)
-
-
     def run_fault_study(self):
         fault_module = FaultStudySolver(self.circuit, self.faulted_bus, self.fault_type, self.fault_impedance)
         fault_current, voltages = fault_module.run()
