@@ -14,9 +14,8 @@ DC Power Flow is a simplified model used widely in planning and analysis. It is 
 - Only real power is modeled
 
 ### Core Equation:
-\[
-\boldsymbol{\delta} = B'^{-1} \cdot \mathbf{P}
-\]
+![{142A1A8C-493D-4FF5-929C-06B66CC415C1}](https://github.com/user-attachments/assets/027d7761-922e-4070-a050-1a6eedf6f625)
+
 Where:
 - \( B' \) is the reduced susceptance matrix (imaginary part of Ybus without the slack bus),
 - \( P \) is the net real power injection vector (in p.u.),
@@ -54,8 +53,8 @@ dc_solver.display_results()
 - Small test system manually solved using MATLAB
 - Matrix B′ and vector P were defined explicitly
 - Python simulation output matched manual solution:
-  - \( \theta_2 = -4.3409^\circ \)
-  - \( \theta_3 = -6.3111^\circ \)
+  ![{BD04B8F2-5A8A-4851-9EF5-602CD4EA5D7D}](https://github.com/user-attachments/assets/adde0b09-758e-4366-8181-01b888c3e13c)
+
 - Error < 0.005°
 
 ### ✅ Test Case 2: 7-Bus System (PowerWorld Validation)
@@ -71,10 +70,11 @@ dc_solver.display_results()
 - `Seven_Bus_System.py`: Main example test case
 - `Three_Bus_Test.py`: Manual validation case
 
-### ▶️ Run
-```bash
-python Seven_Bus_System.py
-```
+---
+
+### 📄 Full Documentation
+
+For an expanded version of this README, including detailed system setup, validation steps, matrix results, and screenshots, please see the full project report available in the repository:
 
 ---
 
