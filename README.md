@@ -47,7 +47,7 @@ The GUI enhancement makes these complex analyses accessible to users unfamiliar 
 
 1. Ensure you have Python and `tkinter` installed.
 2. Define the circuit and all components in `Seven_Bus_System.py`.
-3. At the end of `Seven_Bus_System.py`, add the following line:
+3. At the end of `Seven_Bus_System.py`, run the following line:
 
 ```python
 launch_gui(circuit)
