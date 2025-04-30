@@ -105,7 +105,7 @@ print(ybus_zero)
 # Comment/uncomment depending on which analysis you want to run.
 
 # # Example for Power Flow Analysis
-from Classes.GUI import launch_gui
+from Classes.PowerSimGUI import launch_gui
 launch_gui(circuit)
 
 # solver = Solver(circuit, analysis_mode='pf')
