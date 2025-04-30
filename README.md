@@ -51,3 +51,15 @@ The GUI enhancement makes these complex analyses accessible to users unfamiliar 
 
 ```python
 launch_gui(circuit)
+
+```
+
+---
+
+## 📄 Additional Documentation
+
+For complete details on simulator architecture, implementation flow, and feature specifications, please refer to:
+
+**Section 7 – GUI Enhancement** in the full technical documentation:  
+[📘 Project3_TechnicalManual.pdf – Section 7](https://github.com/Kamisama-D/Main_Simulator/blob/Jenny_Project_3/Project3_TechnicalManual.pdf)
+
